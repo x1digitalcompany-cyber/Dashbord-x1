@@ -1,0 +1,184 @@
+"use client";
+
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+} from "recharts";
+import { PagamentosTable } from "@/components/dashboard/PagamentosTable";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useFetchOnFilters } from "@/contexts/DashboardFiltersContext";
+import { formatCurrency, formatDatetime } from "@/lib/utils";
+import type { PagamentosExpanded, PaymentGateway } from "@/types";
+
+const GATEWAY_LABEL: Record<PaymentGateway, string> = {
+  pagarme: "Pagar.me",
+  payt: "Payt",
+  five: "Five (webhook)",
+};
+
+const GATEWAY_COLORS = ["#6366f1", "#f59e0b", "#10b981"];
+
+const STATUS_LABEL = {
+  approved: "Aprovado",
+  pending: "Pendente",
+  refunded: "Estorno",
+  chargeback: "Inadimplente",
+} as const;
+
+export default function PagamentosPage() {
+  const data = useFetchOnFilters<PagamentosExpanded>(async (params, signal) => {
+    const res = await fetch(`/api/dashboard/payments?${params}&expanded=1`, {
+      signal,
+    });
+    if (!res.ok) throw new Error("Falha ao carregar pagamentos");
+    return res.json();
+  });
+
+  if (data.loading) {
+    return (
+      <div className="mx-auto max-w-[1000px] space-y-5">
+        <Skeleton className="h-24 rounded-2xl" />
+        <div className="grid grid-cols-2 gap-5">
+          <Skeleton className="h-72 rounded-2xl" />
+          <Skeleton className="h-72 rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (data.error) {
+    return (
+      <div className="mx-auto max-w-[1000px] rounded-2xl border border-red-100 bg-red-50 p-6 text-sm text-red-600">
+        {data.error}
+      </div>
+    );
+  }
+
+  const d = data.data;
+  if (!d) return null;
+
+  const pieData = d.byGateway
+    .filter((g) => g.volume > 0)
+    .map((g) => ({
+      name: GATEWAY_LABEL[g.gateway],
+      value: g.volume,
+    }));
+
+  return (
+    <div className="mx-auto max-w-[1000px] space-y-6">
+      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950">
+        <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+          Total consolidado
+        </p>
+        <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
+          {formatCurrency(d.totalVolume)}
+        </p>
+        <p className="text-sm text-gray-500">{d.totalCount} transações</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        {d.byGateway.map((g) => (
+          <div
+            key={g.gateway}
+            className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-950"
+          >
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {GATEWAY_LABEL[g.gateway]}
+            </p>
+            <p className="mt-1 text-xl font-bold">{formatCurrency(g.volume)}</p>
+            <p className="text-xs text-gray-400">{g.count} transações</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <PagamentosTable data={d.rows} loading={false} />
+
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950">
+          <h3 className="mb-4 text-sm font-semibold">Distribuição por gateway</h3>
+          {pieData.length ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={90}
+                  label={({ name, percent }) =>
+                    `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                  }
+                >
+                  {pieData.map((_, i) => (
+                    <Cell key={i} fill={GATEWAY_COLORS[i % GATEWAY_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v) => formatCurrency(Number(v ?? 0))} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-sm text-gray-400">Sem dados no período.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-950">
+        <h3 className="border-b border-gray-100 px-5 py-4 text-sm font-semibold dark:border-gray-800">
+          Últimas transações
+        </h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-50 text-left text-xs text-gray-400 dark:border-gray-800">
+                <th className="px-5 py-3">Pedido</th>
+                <th className="px-5 py-3">Cliente</th>
+                <th className="px-5 py-3">Gateway</th>
+                <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3 text-right">Valor</th>
+                <th className="px-5 py-3">Data</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.recent.map((row) => (
+                <tr
+                  key={row.id}
+                  className="border-b border-gray-50 last:border-0 dark:border-gray-800"
+                >
+                  <td className="px-5 py-3 font-mono text-xs">{row.orderNumber}</td>
+                  <td className="px-5 py-3">{row.customerName}</td>
+                  <td className="px-5 py-3">{GATEWAY_LABEL[row.gateway]}</td>
+                  <td className="px-5 py-3">
+                    <Badge
+                      variant={
+                        row.status === "approved"
+                          ? "green"
+                          : row.status === "pending"
+                            ? "amber"
+                            : "red"
+                      }
+                    >
+                      {STATUS_LABEL[row.status]}
+                    </Badge>
+                  </td>
+                  <td className="px-5 py-3 text-right font-medium">
+                    {formatCurrency(row.value)}
+                  </td>
+                  <td className="px-5 py-3 text-gray-400">
+                    {formatDatetime(row.createdAt)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
