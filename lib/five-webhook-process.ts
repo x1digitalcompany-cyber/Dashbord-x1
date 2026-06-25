@@ -114,17 +114,26 @@ export async function processFiveWebhookPost(
   options?: { skipSecret?: boolean }
 ): Promise<NextResponse> {
   const secret = expectedSecret(source);
+  const envKey = `FIVE_WEBHOOK_SECRET_${source === "antecipado" ? "ANTECIPADO" : "AGENDADO"}`;
+  const isProd = process.env.NODE_ENV === "production";
 
   if (!options?.skipSecret) {
     if (!secret) {
-      return json(401, {
-        ok: false,
-        error: `Configure FIVE_WEBHOOK_SECRET_${source === "antecipado" ? "ANTECIPADO" : "AGENDADO"} no .env.local.`,
-      });
-    }
-    const incoming = getSecretFromRequest(req);
-    if (incoming !== secret) {
-      return json(401, { ok: false, error: "Secret inválido (header X-Five-Secret)." });
+      if (isProd) {
+        return json(401, {
+          ok: false,
+          error: `Configure ${envKey} nas variáveis de ambiente (Vercel → Settings → Environment Variables).`,
+        });
+      }
+      // Dev: aceita sem secret mas avisa no console
+      console.warn(
+        `[webhook/five/${source}] AVISO: ${envKey} não configurada — aceitando em modo dev. Reinicie o servidor após adicionar ao .env.local.`
+      );
+    } else {
+      const incoming = getSecretFromRequest(req);
+      if (incoming !== secret) {
+        return json(401, { ok: false, error: "Secret inválido (header X-Five-Secret)." });
+      }
     }
   }
 
