@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { KanbanFive } from "@/components/dashboard/KanbanFive";
+import { useDashboardFilters } from "@/contexts/DashboardFiltersContext";
+import { fetchKanbanBoard, moveKanbanOrder } from "@/lib/api/kanban";
+import { computeKanbanMetrics } from "@/lib/kanban-utils";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
-import { moveKanbanOrder } from "@/lib/api/kanban";
 import type {
-  KanbanApiResponse,
   KanbanColumn,
   KanbanColumns,
   KanbanMetrics,
@@ -33,7 +34,12 @@ const EMPTY_METRICS: KanbanMetrics = {
   inadimplentesCount: 0,
 };
 
-function useKanbanTipo(tipo: KanbanOperationType) {
+const KANBAN_REFRESH_MS = 30_000;
+
+function useKanbanTipo(
+  tipo: KanbanOperationType,
+  sellerIds: string[]
+) {
   const [data, setData] = useState<KanbanColumns | null>(null);
   const [metrics, setMetrics] = useState<KanbanMetrics>(EMPTY_METRICS);
   const [loading, setLoading] = useState(true);
@@ -43,10 +49,8 @@ function useKanbanTipo(tipo: KanbanOperationType) {
     setLoading(true);
     setError(undefined);
     try {
-      const res = await fetch(`/api/dashboard/kanban?tipo=${tipo}`, { signal });
-      if (!res.ok) throw new Error("Falha ao carregar pedidos");
-      const json = (await res.json()) as KanbanApiResponse;
-      setData(json.columns ?? json);
+      const json = await fetchKanbanBoard(tipo, sellerIds, signal);
+      setData(json.columns ?? EMPTY_COLUMNS);
       setMetrics(json.metrics ?? EMPTY_METRICS);
     } catch (e) {
       if ((e as Error).name === "AbortError") return;
@@ -54,12 +58,19 @@ function useKanbanTipo(tipo: KanbanOperationType) {
     } finally {
       setLoading(false);
     }
-  }, [tipo]);
+  }, [tipo, sellerIds.join(",")]);
 
   useEffect(() => {
     const ctrl = new AbortController();
     load(ctrl.signal);
     return () => ctrl.abort();
+  }, [load]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      load();
+    }, KANBAN_REFRESH_MS);
+    return () => clearInterval(interval);
   }, [load]);
 
   return { data, metrics, loading, error, reload: load };
@@ -68,26 +79,47 @@ function useKanbanTipo(tipo: KanbanOperationType) {
 export default function KanbanPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { filters } = useDashboardFilters();
+  const sellerIds = filters.sellerIds;
+
   const tipoParam = searchParams.get("tipo");
   const activeTab: KanbanOperationType =
     tipoParam === "agendado" ? "agendado" : "antecipado";
 
-  const antecipado = useKanbanTipo("antecipado");
-  const agendado = useKanbanTipo("agendado");
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (!tipoParam) {
+      router.replace("/kanban?tipo=antecipado", { scroll: false });
+    }
+  }, [tipoParam, router]);
+
+  const antecipado = useKanbanTipo("antecipado", sellerIds);
+  const agendado = useKanbanTipo("agendado", sellerIds);
 
   const active = activeTab === "antecipado" ? antecipado : agendado;
 
   const setTab = (tab: KanbanOperationType) => {
+    setSearch("");
     router.replace(`/kanban?tipo=${tab}`, { scroll: false });
   };
 
-  const handleMove = (orderId: string, newColumn: KanbanColumn) =>
-    moveKanbanOrder(orderId, newColumn).then(() => active.reload());
+  const handleMove = async (orderId: string, newColumn: KanbanColumn) => {
+    await moveKanbanOrder(orderId, newColumn);
+    await active.reload();
+  };
 
   const tabCount = (tab: KanbanOperationType) => {
-    const m = tab === "antecipado" ? antecipado.metrics : agendado.metrics;
-    return m.total;
+    const hook = tab === "antecipado" ? antecipado : agendado;
+    return hook.metrics.total;
   };
+
+  const displayMetrics = useMemo(() => {
+    if (active.data) {
+      return computeKanbanMetrics(active.data, search);
+    }
+    return active.metrics;
+  }, [active.data, active.metrics, search]);
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-4">
@@ -121,14 +153,14 @@ export default function KanbanPage() {
 
       {!active.loading && !active.error && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <MetricCard label="Total de pedidos" value={formatNumber(active.metrics.total)} />
+          <MetricCard label="Total de pedidos" value={formatNumber(displayMetrics.total)} />
           <MetricCard
             label="Valor dos pagos"
-            value={formatCurrency(active.metrics.paidValue)}
+            value={formatCurrency(displayMetrics.paidValue)}
           />
           <MetricCard
             label="Inadimplentes"
-            value={formatNumber(active.metrics.inadimplentesCount)}
+            value={formatNumber(displayMetrics.inadimplentesCount)}
           />
         </div>
       )}
@@ -139,6 +171,8 @@ export default function KanbanPage() {
           data={antecipado.data}
           loading={antecipado.loading}
           error={antecipado.error}
+          search={search}
+          onSearchChange={setSearch}
           onMove={handleMove}
         />
       ) : (
@@ -147,6 +181,8 @@ export default function KanbanPage() {
           data={agendado.data}
           loading={agendado.loading}
           error={agendado.error}
+          search={search}
+          onSearchChange={setSearch}
           onMove={handleMove}
         />
       )}

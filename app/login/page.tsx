@@ -25,14 +25,18 @@ export default function LoginPage() {
     setError(null);
 
     const result = await signIn("credentials", {
-      email,
+      email: email.trim().toLowerCase(),
       password,
       redirect: false,
       callbackUrl,
     });
 
     if (result?.error) {
-      setError("E-mail ou senha incorretos.");
+      const msg =
+        result.error === "Configuration"
+          ? "Erro de configuração (NEXTAUTH_SECRET ou NEXTAUTH_URL). Verifique as variáveis de ambiente."
+          : "E-mail ou senha incorretos.";
+      setError(msg);
       setLoading(false);
       return;
     }

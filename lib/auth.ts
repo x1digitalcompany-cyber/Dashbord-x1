@@ -18,21 +18,33 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Senha",  type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        const email = credentials?.email?.trim().toLowerCase();
+        const password = credentials?.password;
 
-        const { data: user, error } = await supabase
-          .from("users")
-          .select("id, email, name, password_hash, role, is_active")
-          .eq("email", credentials.email)
-          .eq("is_active", true)
-          .single();
+        if (!email || !password) return null;
 
-        if (error || !user) return null;
+        try {
+          const { data: user, error } = await supabase
+            .from("users")
+            .select("id, email, name, password_hash, role, is_active")
+            .eq("email", email)
+            .eq("is_active", true)
+            .maybeSingle();
 
-        const valid = await bcrypt.compare(credentials.password, user.password_hash);
-        if (!valid) return null;
+          if (error) {
+            console.error("[auth] Supabase:", error.message);
+            return null;
+          }
+          if (!user?.password_hash) return null;
 
-        return { id: user.id, email: user.email, name: user.name, role: user.role };
+          const valid = await bcrypt.compare(password, user.password_hash);
+          if (!valid) return null;
+
+          return { id: user.id, email: user.email, name: user.name, role: user.role };
+        } catch (err) {
+          console.error("[auth] authorize:", err);
+          return null;
+        }
       },
     }),
   ],
