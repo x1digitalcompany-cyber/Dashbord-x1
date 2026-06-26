@@ -148,6 +148,7 @@ export async function GET(req: NextRequest) {
         prevOrdersQ,
         fetchMetaAdsInsights(from, to).catch((e: Error) => ({
           spend: 0,
+          leads: 0,
           daily: [],
           error: e.message,
           impressions: 0,
@@ -157,9 +158,11 @@ export async function GET(req: NextRequest) {
           campaigns: [],
           currency: "BRL" as const,
           source: "meta_api" as const,
+          mock: true,
         })),
         fetchMetaAdsInsights(prev.from, prev.to).catch(() => ({
           spend: 0,
+          leads: 0,
           daily: [],
           impressions: 0,
           clicks: 0,
@@ -168,6 +171,7 @@ export async function GET(req: NextRequest) {
           campaigns: [],
           currency: "BRL" as const,
           source: "meta_api" as const,
+          mock: true,
         })),
         countAppointments(fromISO, toISO),
         countAppointments(prevFromISO, prevToISO),
@@ -179,8 +183,16 @@ export async function GET(req: NextRequest) {
     const orders = (ordersRes.data ?? []) as OrderRow[];
     const prevOrders = (prevOrdersRes.data ?? []) as OrderRow[];
 
-    const curr = buildMetrics(orders, metaCurr.spend, leadsCurr);
-    const previous = buildMetrics(prevOrders, metaPrev.spend, leadsPrev);
+    const curr = buildMetrics(
+      orders,
+      metaCurr.spend,
+      metaCurr.leads > 0 ? metaCurr.leads : leadsCurr
+    );
+    const previous = buildMetrics(
+      prevOrders,
+      metaPrev.spend,
+      metaPrev.leads > 0 ? metaPrev.leads : leadsPrev
+    );
 
     const revenueByDay = groupByDay(orders, (o) =>
       REVENUE_STATUSES.includes(o.kanban_status as typeof REVENUE_STATUSES[number])
@@ -211,7 +223,8 @@ export async function GET(req: NextRequest) {
         taxaInadimplencia: pctChange(curr.taxaInadimplencia, previous.taxaInadimplencia),
       },
       timeline,
-      metaAdsError: "error" in metaCurr ? metaCurr.error : undefined,
+      metaAdsError: metaCurr.error ?? ("error" in metaCurr ? metaCurr.error : undefined),
+      metaAdsConfigured: !metaCurr.mock,
     };
 
     return NextResponse.json(result);

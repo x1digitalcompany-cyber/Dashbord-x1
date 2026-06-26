@@ -11,6 +11,12 @@ export function maskToken(token: string): string {
   return `${token.slice(0, 4)}••••${token.slice(-4)}`;
 }
 
+export function maskAccountId(accountId: string): string {
+  const id = normalizeAccountId(accountId);
+  if (id.length <= 4) return `act_****${id}`;
+  return `act_****${id.slice(-4)}`;
+}
+
 export async function getMetaApiVersion(): Promise<string> {
   const { data, error } = await supabase
     .from("app_settings")

@@ -9,11 +9,13 @@ export async function GET(req: NextRequest) {
   try {
     const data = await fetchMetaAdsInsights(from, to);
 
+    if (data.mock) {
+      return NextResponse.json(data);
+    }
+
     if (data.error && data.spend === 0 && !data.campaigns.length) {
-      return NextResponse.json(
-        { error: data.error, ...data },
-        { status: data.error.includes("Token") ? 401 : 503 }
-      );
+      const status = /token|expirado/i.test(data.error) ? 401 : 503;
+      return NextResponse.json(data, { status });
     }
 
     return NextResponse.json(data);

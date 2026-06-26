@@ -175,6 +175,7 @@ export interface FinanceiroData {
   variations: Partial<Record<keyof FinanceMetrics, number>>;
   timeline: FinanceTimelinePoint[];
   metaAdsError?: string;
+  metaAdsConfigured?: boolean;
 }
 
 export interface EstadoMetric {

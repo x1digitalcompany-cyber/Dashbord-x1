@@ -46,6 +46,7 @@ const KPIS: KpiDef[] = [
     label: "Gasto com Anúncios",
     icon: Megaphone,
     format: formatCurrency,
+    skip: true,
   },
   {
     key: "lucroLiquido",
@@ -78,6 +79,7 @@ const KPIS: KpiDef[] = [
     label: "Leads Atendidos",
     icon: Users,
     format: formatNumber,
+    skip: true,
   },
   {
     key: "taxaConversao",

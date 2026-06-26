@@ -4,10 +4,12 @@ import { requireSession } from "@/lib/require-session";
 import {
   fetchMetaAccountInfo,
   getMetaApiVersion,
+  maskAccountId,
   maskToken,
   normalizeAccountId,
   setMetaApiVersion,
 } from "@/lib/meta-account";
+import { getLastMetaFetchAt, isMetaAdsConfigured } from "@/lib/api/meta-ads";
 
 export async function GET(req: NextRequest) {
   const token = await requireSession(req);
@@ -16,7 +18,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const [accountsRes, apiVersion] = await Promise.all([
+    const [accountsRes, apiVersion, configured, lastFetchAt] = await Promise.all([
       supabase
         .from("ad_accounts")
         .select(
@@ -25,6 +27,8 @@ export async function GET(req: NextRequest) {
         .eq("platform", "meta")
         .order("created_at", { ascending: false }),
       getMetaApiVersion(),
+      isMetaAdsConfigured(),
+      getLastMetaFetchAt(),
     ]);
 
     if (accountsRes.error) {
@@ -41,7 +45,18 @@ export async function GET(req: NextRequest) {
       tokenMasked: maskToken(row.access_token),
     }));
 
-    return NextResponse.json({ accounts, apiVersion });
+    const envAccountId = process.env.META_ADS_AD_ACCOUNT_ID?.trim();
+    const envToken = process.env.META_ADS_ACCESS_TOKEN?.trim();
+
+    return NextResponse.json({
+      accounts,
+      apiVersion,
+      configured,
+      lastFetchAt,
+      envAccountMasked: envAccountId ? maskAccountId(envAccountId) : null,
+      envTokenPresent: Boolean(envToken),
+      connectionStatus: configured ? ("connected" as const) : ("not_configured" as const),
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Erro ao listar contas";
     return NextResponse.json({ error: message }, { status: 500 });

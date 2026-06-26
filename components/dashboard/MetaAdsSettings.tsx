@@ -25,6 +25,8 @@ interface AdAccountRow {
   tokenMasked: string;
 }
 
+type ConnectionStatus = "connected" | "not_configured" | "token_expired";
+
 interface HealthRow {
   id: string;
   accountId: string;
@@ -42,6 +44,9 @@ export function MetaAdsSettings() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthRow[] | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("not_configured");
+  const [lastFetchAt, setLastFetchAt] = useState<string | null>(null);
+  const [envAccountMasked, setEnvAccountMasked] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
   const [showToken, setShowToken] = useState(false);
@@ -59,11 +64,18 @@ export function MetaAdsSettings() {
       const data = await parseJsonResponse<{
         accounts?: AdAccountRow[];
         apiVersion?: string;
+        configured?: boolean;
+        lastFetchAt?: string | null;
+        envAccountMasked?: string | null;
+        connectionStatus?: ConnectionStatus;
         error?: string;
       }>(res);
       if (!res.ok) throw new Error(data.error ?? "Falha ao carregar contas Meta");
       setAccounts(data.accounts ?? []);
       setApiVersion(data.apiVersion ?? "v19.0");
+      setLastFetchAt(data.lastFetchAt ?? null);
+      setEnvAccountMasked(data.envAccountMasked ?? null);
+      setConnectionStatus(data.connectionStatus ?? "not_configured");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao carregar");
     } finally {
@@ -74,6 +86,32 @@ export function MetaAdsSettings() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const statusBanner = {
+    connected: {
+      label: "Conectado",
+      icon: "✅",
+      className:
+        "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200",
+    },
+    not_configured: {
+      label: "Não configurado",
+      icon: "⚠️",
+      className:
+        "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+    },
+    token_expired: {
+      label: "Token expirado",
+      icon: "🔴",
+      className:
+        "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200",
+    },
+  }[connectionStatus];
+
+  function formatFetchDate(iso: string | null) {
+    if (!iso) return "Nunca";
+    return new Date(iso).toLocaleString("pt-BR");
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -144,6 +182,18 @@ export function MetaAdsSettings() {
       }>(res);
       if (!res.ok) throw new Error(data.error ?? "Falha no teste");
       setHealth(data.accounts ?? []);
+      const expired = (data.accounts ?? []).some(
+        (a) =>
+          a.status === "error" &&
+          /expirad|invalid oauth|190/i.test(a.message)
+      );
+      if (expired) {
+        setConnectionStatus("token_expired");
+      } else if ((data.ok ?? 0) > 0) {
+        setConnectionStatus("connected");
+      } else if ((data.total ?? 0) === 0) {
+        setConnectionStatus("not_configured");
+      }
       if ((data.errors ?? 0) > 0) {
         setError(`${data.errors} conta(s) com erro de conexão.`);
       } else if ((data.total ?? 0) === 0) {
@@ -208,6 +258,21 @@ export function MetaAdsSettings() {
           )}
           Testar conexão
         </button>
+      </div>
+
+      <div
+        className={cn(
+          "mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm",
+          statusBanner.className
+        )}
+      >
+        <span className="font-medium">
+          {statusBanner.icon} {statusBanner.label}
+        </span>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs opacity-90">
+          {envAccountMasked && <span>Conta env: {envAccountMasked}</span>}
+          <span>Último fetch: {formatFetchDate(lastFetchAt)}</span>
+        </div>
       </div>
 
       {error && (

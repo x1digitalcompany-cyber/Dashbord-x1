@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { parseFromToParams } from "@/lib/period";
 import { parseSellerParam } from "@/lib/seller-filter";
+import { fetchMetaAdsInsights } from "@/lib/api/meta-ads";
 import type { KpiData } from "@/types";
-
-const USD_BRL = Number(process.env.USD_BRL_FALLBACK_RATE ?? "5.4");
 
 function prevPeriod(from: Date, to: Date) {
   const len = to.getTime() - from.getTime();
@@ -18,25 +17,6 @@ function pct(curr: number, prev: number) {
 
 function metaDate(d: Date) {
   return d.toISOString().slice(0, 10);
-}
-
-async function fetchMetaSpend(
-  accountId: string,
-  accessToken: string,
-  currency: string,
-  from: Date,
-  to: Date
-): Promise<number> {
-  const url = new URL(`https://graph.facebook.com/v21.0/act_${accountId}/insights`);
-  url.searchParams.set("fields", "spend");
-  url.searchParams.set("time_range", JSON.stringify({ since: metaDate(from), until: metaDate(to) }));
-  url.searchParams.set("access_token", accessToken);
-
-  const res = await fetch(url.toString(), { cache: "no-store" });
-  if (!res.ok) return 0;
-  const json = await res.json();
-  const spend = Number(json?.data?.[0]?.spend ?? 0);
-  return currency === "USD" ? spend * USD_BRL : spend;
 }
 
 export async function GET(req: NextRequest) {
@@ -140,39 +120,36 @@ export async function GET(req: NextRequest) {
     const leadsTotal = leadsRes.count ?? 0;
     const leadsPrev  = leadsPrevRes.count ?? 0;
 
-    // ── Ads spend — Meta API live + fallback tabela ad_spend ─────────────────
-    let adsSpend     = 0;
-    let adsPrevSpend = 0;
+    // ── Ads spend — Meta API via lib/api/meta-ads (v19.0) ───────────────────
+    const [metaCurr, metaPrev] = await Promise.all([
+      fetchMetaAdsInsights(from, to).catch(() => null),
+      fetchMetaAdsInsights(prev.from, prev.to).catch(() => null),
+    ]);
 
-    if (adAccountsRes.data?.length) {
-      // Busca live via Meta Graph API
-      const [currSums, prevSums] = await Promise.all([
-        Promise.all(
-          adAccountsRes.data.map((acc) =>
-            fetchMetaSpend(acc.account_id, acc.access_token, acc.currency, from, to).catch(() => 0)
-          )
-        ),
-        Promise.all(
-          adAccountsRes.data.map((acc) =>
-            fetchMetaSpend(acc.account_id, acc.access_token, acc.currency, prev.from, prev.to).catch(() => 0)
-          )
-        ),
-      ]);
-      adsSpend     = currSums.reduce((s, v) => s + v, 0);
-      adsPrevSpend = prevSums.reduce((s, v) => s + v, 0);
-    } else {
-      // Fallback: soma da tabela ad_spend (valores em BRL)
-      adsSpend     = (adSpendRes.data ?? []).reduce((s, r) => {
+    let adsSpend = metaCurr?.spend ?? 0;
+    let adsPrevSpend = metaPrev?.spend ?? 0;
+    let metaLeads = metaCurr?.leads ?? 0;
+    let metaLeadsPrev = metaPrev?.leads ?? 0;
+
+    if (!metaCurr && adAccountsRes.data?.length) {
+      adsSpend = 0;
+      adsPrevSpend = 0;
+    } else if (!metaCurr) {
+      adsSpend = (adSpendRes.data ?? []).reduce((s, r) => {
         const val = Number(r.spend);
-        return s + (r.currency === "USD" ? val * USD_BRL : val);
+        return s + (r.currency === "USD" ? val * Number(process.env.USD_BRL_FALLBACK_RATE ?? "5.4") : val);
       }, 0);
       adsPrevSpend = (adSpendPrevRes.data ?? []).reduce((s, r) => {
         const val = Number(r.spend);
-        return s + (r.currency === "USD" ? val * USD_BRL : val);
+        return s + (r.currency === "USD" ? val * Number(process.env.USD_BRL_FALLBACK_RATE ?? "5.4") : val);
       }, 0);
+      metaLeads = leadsTotal;
+      metaLeadsPrev = leadsPrev;
     }
 
-    const cpl = leadsTotal > 0 ? adsSpend / leadsTotal : 0;
+    const leadsForCpl = metaLeads > 0 ? metaLeads : leadsTotal;
+    const leadsPrevForCpl = metaLeadsPrev > 0 ? metaLeadsPrev : leadsPrev;
+    const cpl = leadsForCpl > 0 ? adsSpend / leadsForCpl : 0;
 
     const kpi: KpiData = {
       ads: {
@@ -180,9 +157,9 @@ export async function GET(req: NextRequest) {
         variationPct: pct(adsSpend, adsPrevSpend),
       },
       leads: {
-        total:        leadsTotal,
+        total:        metaLeads > 0 ? metaLeads : leadsTotal,
         cpl,
-        variationPct: pct(leadsTotal, leadsPrev),
+        variationPct: pct(metaLeads > 0 ? metaLeads : leadsTotal, metaLeadsPrev > 0 ? metaLeadsPrev : leadsPrev),
       },
       agendamentos: {
         total:          currAgend,

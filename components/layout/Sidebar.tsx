@@ -9,6 +9,7 @@ import {
   Columns3,
   CalendarDays,
   CreditCard,
+  Megaphone,
   Settings,
   Menu,
   LogOut,
@@ -31,6 +32,7 @@ const NAV_ITEMS: {
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/kanban", label: "Kanban Five", icon: Columns3 },
   { href: "/agendamentos", label: "Agendamentos", icon: CalendarDays },
+  { href: "/anuncios", label: "Anúncios", icon: Megaphone },
   { href: "/pagamentos", label: "Pagamentos", icon: CreditCard },
   { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
