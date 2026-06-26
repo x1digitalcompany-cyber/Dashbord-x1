@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchMetaAdsInsights } from "@/lib/api/meta-ads";
+import { parseFromToParams } from "@/lib/period";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
-  const from = new Date(searchParams.get("from") ?? Date.now() - 30 * 86400000);
-  const to = new Date(searchParams.get("to") ?? Date.now());
+  const { from, to } = parseFromToParams(searchParams);
 
   try {
     const data = await fetchMetaAdsInsights(from, to);

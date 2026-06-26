@@ -1,71 +1,51 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Users, ChevronDown, RefreshCw } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Users, ChevronDown, RefreshCw, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  formatCustomPeriodLabel,
+  getDateRangeForPeriod,
+  saveFiltersToStorage,
+} from "@/lib/period";
 import type { GlobalFilters, PeriodOption } from "@/types";
 
 const PERIOD_OPTIONS: { value: PeriodOption; label: string }[] = [
   { value: "today", label: "Hoje" },
-  { value: "7d",    label: "7 dias" },
-  { value: "30d",   label: "30 dias" },
+  { value: "7d", label: "7 dias" },
+  { value: "30d", label: "30 dias" },
   { value: "custom", label: "Personalizado" },
 ];
 
-function getDateRange(period: PeriodOption): { from: Date; to: Date } {
-  const to   = new Date();
-  const from = new Date();
-  if (period === "today") {
-    from.setHours(0, 0, 0, 0);
-  } else if (period === "7d") {
-    from.setDate(from.getDate() - 7);
-  } else if (period === "30d") {
-    from.setDate(from.getDate() - 30);
-  }
-  return { from, to };
+interface SellerItem {
+  id: string;
+  name: string;
 }
 
-interface SellerItem { id: string; name: string }
-
 interface FilterBarProps {
-  filters:     GlobalFilters;
-  onChange:    (filters: GlobalFilters) => void;
-  onRefresh:   () => void;
+  filters: GlobalFilters;
+  onChange: (filters: GlobalFilters) => void;
+  onRefresh: () => void;
   isRefreshing?: boolean;
 }
 
-const LS_KEY = "dashboard-x1-filters";
-
-function saveFilters(f: GlobalFilters) {
-  try {
-    localStorage.setItem(
-      LS_KEY,
-      JSON.stringify({ period: f.period, sellerName: f.sellerName })
-    );
-  } catch (_) {}
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
-export function loadSavedFilters(): Partial<Pick<GlobalFilters, "period" | "sellerName">> {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as {
-        period?: PeriodOption;
-        sellerName?: string | null;
-        sellerIds?: string[];
-      };
-      return {
-        period: parsed.period,
-        sellerName: parsed.sellerName ?? null,
-      };
-    }
-  } catch (_) {}
-  return {};
+function daysAgoIso(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
 }
 
 export function FilterBar({ filters, onChange, onRefresh, isRefreshing }: FilterBarProps) {
   const [sellerOpen, setSellerOpen] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
   const [sellersList, setSellersList] = useState<SellerItem[]>([]);
+  const [customFrom, setCustomFrom] = useState(filters.customFrom ?? daysAgoIso(30));
+  const [customTo, setCustomTo] = useState(filters.customTo ?? todayIso());
+  const customRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch("/api/dashboard/sellers-list")
@@ -74,41 +54,116 @@ export function FilterBar({ filters, onChange, onRefresh, isRefreshing }: Filter
       .catch(() => {});
   }, []);
 
-  const setPeriod = (period: PeriodOption) => {
-    if (period === "custom") return;
-    const next = { ...filters, period, dateRange: getDateRange(period) };
-    saveFilters(next);
+  useEffect(() => {
+    if (filters.customFrom) setCustomFrom(filters.customFrom);
+    if (filters.customTo) setCustomTo(filters.customTo);
+  }, [filters.customFrom, filters.customTo]);
+
+  const applyPeriod = (period: PeriodOption, custom?: { from: string; to: string }) => {
+    const dateRange = getDateRangeForPeriod(period, custom);
+    const next: GlobalFilters = {
+      ...filters,
+      period,
+      dateRange,
+      customFrom: period === "custom" ? custom?.from : undefined,
+      customTo: period === "custom" ? custom?.to : undefined,
+    };
+    saveFiltersToStorage(next);
     onChange(next);
+  };
+
+  const handlePeriodClick = (period: PeriodOption) => {
+    if (period === "custom") {
+      setCustomOpen((o) => !o);
+      return;
+    }
+    setCustomOpen(false);
+    applyPeriod(period);
+  };
+
+  const applyCustomRange = () => {
+    if (!customFrom || !customTo || customFrom > customTo) return;
+    applyPeriod("custom", { from: customFrom, to: customTo });
+    setCustomOpen(false);
   };
 
   const selectSeller = (name: string | null) => {
     const next = { ...filters, sellerName: name };
-    saveFilters(next);
+    saveFiltersToStorage(next);
     onChange(next);
     setSellerOpen(false);
   };
 
   const selectedLabel = filters.sellerName ?? "Todos os vendedores";
 
+  const customLabel =
+    filters.period === "custom" && filters.customFrom && filters.customTo
+      ? formatCustomPeriodLabel(filters.customFrom, filters.customTo)
+      : "Personalizado";
+
   return (
     <div className="flex items-center gap-3 flex-wrap">
-      <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1 gap-1">
+      <div className="relative flex items-center bg-white border border-gray-200 rounded-xl p-1 gap-1">
         {PERIOD_OPTIONS.map((opt) => (
           <button
             key={opt.value}
             type="button"
-            onClick={() => setPeriod(opt.value)}
+            onClick={() => handlePeriodClick(opt.value)}
             className={cn(
-              "px-3 py-1.5 text-sm rounded-lg font-medium transition-all",
+              "px-3 py-1.5 text-sm rounded-lg font-medium transition-all whitespace-nowrap",
               filters.period === opt.value
                 ? "bg-indigo-600 text-white shadow-sm"
                 : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
             )}
           >
-            {opt.label}
+            {opt.value === "custom" ? customLabel : opt.label}
           </button>
         ))}
+
+        {customOpen && (
+          <div
+            ref={customRef}
+            className="absolute top-full left-0 z-30 mt-2 w-72 rounded-xl border border-gray-100 bg-white p-4 shadow-lg"
+          >
+            <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <Calendar size={12} />
+              Período personalizado
+            </p>
+            <div className="space-y-3">
+              <label className="block text-xs text-gray-500">
+                De
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900"
+                />
+              </label>
+              <label className="block text-xs text-gray-500">
+                Até
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={applyCustomRange}
+                disabled={!customFrom || !customTo || customFrom > customTo}
+                className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                Aplicar
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {customOpen && (
+        <div className="fixed inset-0 z-20" onClick={() => setCustomOpen(false)} />
+      )}
 
       <div className="relative">
         <button

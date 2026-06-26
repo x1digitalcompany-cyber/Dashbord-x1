@@ -5,41 +5,31 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
-import { loadSavedFilters } from "@/components/dashboard/FilterBar";
-import type { GlobalFilters } from "@/types";
+import {
+  buildApiParams,
+  buildInitialFilters,
+  filtersDependencyKey,
+  getDateRangeForPeriod,
+  saveFiltersToStorage,
+} from "@/lib/period";
+import type { GlobalFilters, PeriodOption } from "@/types";
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000;
-
-function getDateRangeForPeriod(period: GlobalFilters["period"]) {
-  const to = new Date();
-  const from = new Date();
-  if (period === "today") {
-    from.setHours(0, 0, 0, 0);
-  } else if (period === "7d") {
-    from.setDate(from.getDate() - 7);
-  } else {
-    from.setDate(from.getDate() - 30);
-  }
-  return { from, to };
-}
-
-function buildInitialFilters(): GlobalFilters {
-  const saved = loadSavedFilters();
-  const period = (saved.period as GlobalFilters["period"]) ?? "30d";
-  return {
-    period,
-    dateRange: getDateRangeForPeriod(period),
-    sellerName: saved.sellerName ?? null,
-  };
-}
 
 interface DashboardFiltersContextValue {
   filters: GlobalFilters;
   setFilters: (filters: GlobalFilters) => void;
+  period: PeriodOption;
+  from: Date;
+  to: Date;
+  sellerName: string | null;
+  setPeriod: (period: PeriodOption, custom?: { from: string; to: string }) => void;
+  setSellerName: (name: string | null) => void;
   refresh: () => void;
   isRefreshing: boolean;
   refreshKey: number;
@@ -50,9 +40,45 @@ const DashboardFiltersContext = createContext<DashboardFiltersContextValue | nul
 );
 
 export function DashboardFiltersProvider({ children }: { children: ReactNode }) {
-  const [filters, setFilters] = useState<GlobalFilters>(buildInitialFilters);
+  const [filters, setFiltersState] = useState<GlobalFilters>(buildInitialFilters);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const setFilters = useCallback((next: GlobalFilters) => {
+    saveFiltersToStorage(next);
+    setFiltersState(next);
+  }, []);
+
+  const setPeriod = useCallback(
+    (period: PeriodOption, custom?: { from: string; to: string }) => {
+      setFiltersState((prev) => {
+        const customFrom = period === "custom" ? custom?.from ?? prev.customFrom : undefined;
+        const customTo = period === "custom" ? custom?.to ?? prev.customTo : undefined;
+        const dateRange = getDateRangeForPeriod(
+          period,
+          customFrom && customTo ? { from: customFrom, to: customTo } : undefined
+        );
+        const next: GlobalFilters = {
+          ...prev,
+          period,
+          dateRange,
+          customFrom,
+          customTo,
+        };
+        saveFiltersToStorage(next);
+        return next;
+      });
+    },
+    []
+  );
+
+  const setSellerName = useCallback((name: string | null) => {
+    setFiltersState((prev) => {
+      const next = { ...prev, sellerName: name };
+      saveFiltersToStorage(next);
+      return next;
+    });
+  }, []);
 
   const refresh = useCallback(() => {
     setIsRefreshing(true);
@@ -65,10 +91,25 @@ export function DashboardFiltersProvider({ children }: { children: ReactNode }) 
     return () => clearInterval(id);
   }, []);
 
+  const value = useMemo(
+    () => ({
+      filters,
+      setFilters,
+      period: filters.period,
+      from: filters.dateRange.from,
+      to: filters.dateRange.to,
+      sellerName: filters.sellerName,
+      setPeriod,
+      setSellerName,
+      refresh,
+      isRefreshing,
+      refreshKey,
+    }),
+    [filters, setFilters, setPeriod, setSellerName, refresh, isRefreshing, refreshKey]
+  );
+
   return (
-    <DashboardFiltersContext.Provider
-      value={{ filters, setFilters, refresh, isRefreshing, refreshKey }}
-    >
+    <DashboardFiltersContext.Provider value={value}>
       {children}
     </DashboardFiltersContext.Provider>
   );
@@ -82,16 +123,7 @@ export function useDashboardFilters() {
   return ctx;
 }
 
-export function buildApiParams(filters: GlobalFilters) {
-  const params = new URLSearchParams({
-    from: filters.dateRange.from.toISOString(),
-    to: filters.dateRange.to.toISOString(),
-  });
-  if (filters.sellerName) {
-    params.set("seller", filters.sellerName);
-  }
-  return params;
-}
+export { buildApiParams } from "@/lib/period";
 
 export function useFetchOnFilters<T>(
   fetcher: (params: URLSearchParams, signal: AbortSignal) => Promise<T>,
@@ -102,6 +134,8 @@ export function useFetchOnFilters<T>(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>();
   const abortRef = useRef<AbortController | null>(null);
+
+  const filterKey = filtersDependencyKey(filters);
 
   useEffect(() => {
     abortRef.current?.abort();
@@ -114,18 +148,19 @@ export function useFetchOnFilters<T>(
     const params = buildApiParams(filters);
     fetcher(params, ctrl.signal)
       .then((result) => {
+        if (ctrl.signal.aborted) return;
         setData(result);
         setLoading(false);
       })
       .catch((err: Error) => {
-        if (err.name === "AbortError") return;
+        if (err.name === "AbortError" || ctrl.signal.aborted) return;
         setError(err.message || "Falha ao carregar dados");
         setLoading(false);
       });
 
     return () => ctrl.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, refreshKey, ...deps]);
+  }, [filterKey, refreshKey, ...deps]);
 
   return { data, loading, error };
 }

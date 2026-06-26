@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { parseFromToParams } from "@/lib/period";
 import { parseSellerParam } from "@/lib/seller-filter";
 import type { PaymentRow, PaymentStatus, PagamentosExpanded } from "@/types";
 
@@ -14,8 +15,7 @@ function kanbanToPaymentStatus(ks: string): PaymentStatus {
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
-  const from = new Date(searchParams.get("from") ?? Date.now() - 30 * 86400000);
-  const to = new Date(searchParams.get("to") ?? Date.now());
+  const { from, to } = parseFromToParams(searchParams);
   const expanded = searchParams.get("expanded") === "1";
   const sellerName = parseSellerParam(searchParams);
 

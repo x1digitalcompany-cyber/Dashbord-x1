@@ -12,6 +12,9 @@ export interface GlobalFilters {
   dateRange: DateRange;
   /** Nome do vendedor (seller_name em orders). null = todos. */
   sellerName: string | null;
+  /** YYYY-MM-DD — apenas quando period === 'custom' */
+  customFrom?: string;
+  customTo?: string;
 }
 
 // ─── KPIs ─────────────────────────────────────────────────────────────────────
