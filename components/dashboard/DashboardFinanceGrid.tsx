@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   DollarSign,
@@ -19,7 +19,30 @@ import { useFetchOnFilters } from "@/contexts/DashboardFiltersContext";
 import type { KpiData } from "@/types";
 
 const META_IMPOSTO_KEY = "meta_imposto_ativo";
-const META_TAX_RATE = 0.125;
+const META_IMPOSTO_PERCENTUAL_KEY = "meta_imposto_percentual";
+const DEFAULT_IMPOSTO_PERCENTUAL = 12.5;
+
+function clampPercentual(value: number): number {
+  return Math.min(50, Math.max(0, Math.round(value * 10) / 10));
+}
+
+function formatPercentualLabel(value: number): string {
+  return `${value.toLocaleString("pt-BR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })}% sobre o gasto`;
+}
+
+function readPercentualFromStorage(): number {
+  try {
+    const saved = localStorage.getItem(META_IMPOSTO_PERCENTUAL_KEY);
+    if (saved === null) return DEFAULT_IMPOSTO_PERCENTUAL;
+    const parsed = Number(saved);
+    return Number.isFinite(parsed) ? clampPercentual(parsed) : DEFAULT_IMPOSTO_PERCENTUAL;
+  } catch {
+    return DEFAULT_IMPOSTO_PERCENTUAL;
+  }
+}
 
 interface FinanceCardProps {
   label: string;
@@ -90,7 +113,10 @@ function ImpostoToggle({
       type="button"
       role="switch"
       aria-checked={active}
-      onClick={() => onChange(!active)}
+      onClick={(e) => {
+        e.stopPropagation();
+        onChange(!active);
+      }}
       className={cn(
         "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors",
         active ? "bg-emerald-500" : "bg-gray-300 dark:bg-gray-600"
@@ -106,13 +132,147 @@ function ImpostoToggle({
   );
 }
 
+function ImpostoMetaAdsCard({
+  imposto,
+  impostoAtivo,
+  percentual,
+  onToggle,
+  onPercentualChange,
+}: {
+  imposto: number;
+  impostoAtivo: boolean;
+  percentual: number;
+  onToggle: (v: boolean) => void;
+  onPercentualChange: (v: number) => void;
+}) {
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [draftPercentual, setDraftPercentual] = useState(String(percentual));
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!popoverOpen) return;
+
+    function handleClickOutside(e: MouseEvent) {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
+        setPopoverOpen(false);
+      }
+    }
+
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") setPopoverOpen(false);
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [popoverOpen]);
+
+  function openPopover() {
+    setDraftPercentual(String(percentual));
+    setPopoverOpen(true);
+  }
+
+  function handleCancel() {
+    setPopoverOpen(false);
+  }
+
+  function handleSave() {
+    const parsed = Number(draftPercentual.replace(",", "."));
+    if (!Number.isFinite(parsed)) return;
+    const next = clampPercentual(parsed);
+    onPercentualChange(next);
+    setPopoverOpen(false);
+  }
+
+  const subtext = impostoAtivo ? formatPercentualLabel(percentual) : "Desativado";
+
+  return (
+    <div
+      ref={cardRef}
+      className="relative rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950"
+    >
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
+              Imposto Meta Ads
+            </span>
+            <button
+              type="button"
+              onClick={openPopover}
+              className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800"
+              aria-label="Editar alíquota do imposto"
+            >
+              <Pencil size={12} />
+            </button>
+            <ImpostoToggle active={impostoAtivo} onChange={onToggle} />
+            <span className="text-[10px] font-semibold uppercase text-gray-400">
+              {impostoAtivo ? "ON" : "OFF"}
+            </span>
+          </div>
+        </div>
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+          <Megaphone size={16} className="text-gray-600" />
+        </div>
+      </div>
+
+      <p className="text-2xl font-bold tabular-nums tracking-tight text-gray-900 dark:text-gray-100">
+        {formatCurrency(imposto)}
+      </p>
+      <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">{subtext}</p>
+
+      {popoverOpen && (
+        <div className="absolute right-4 top-12 z-50 w-52 rounded-xl border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-900">
+          <p className="mb-2 text-xs font-medium text-gray-600 dark:text-gray-300">
+            Alíquota do imposto
+          </p>
+          <div className="mb-3 flex items-center gap-1">
+            <input
+              type="number"
+              min={0}
+              max={50}
+              step={0.1}
+              value={draftPercentual}
+              placeholder="12.5"
+              onChange={(e) => setDraftPercentual(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm tabular-nums dark:border-gray-700 dark:bg-gray-800"
+            />
+            <span className="text-sm text-gray-500">%</span>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="rounded-lg px-2.5 py-1 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700"
+            >
+              Salvar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DashboardFinanceGrid() {
   const [impostoAtivo, setImpostoAtivo] = useState(false);
+  const [impostoPercentual, setImpostoPercentual] = useState(DEFAULT_IMPOSTO_PERCENTUAL);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(META_IMPOSTO_KEY);
       if (saved !== null) setImpostoAtivo(saved === "true");
+      setImpostoPercentual(readPercentualFromStorage());
     } catch {
       /* ignore */
     }
@@ -122,6 +282,16 @@ export function DashboardFinanceGrid() {
     setImpostoAtivo(next);
     try {
       localStorage.setItem(META_IMPOSTO_KEY, String(next));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function saveImpostoPercentual(next: number) {
+    const value = clampPercentual(next);
+    setImpostoPercentual(value);
+    try {
+      localStorage.setItem(META_IMPOSTO_PERCENTUAL_KEY, String(value));
     } catch {
       /* ignore */
     }
@@ -156,7 +326,8 @@ export function DashboardFinanceGrid() {
 
   const f = kpi.data.finance;
   const gasto = f.gastoAnuncios;
-  const imposto = impostoAtivo ? gasto * META_TAX_RATE : 0;
+  const taxRate = impostoPercentual / 100;
+  const imposto = impostoAtivo ? gasto * taxRate : 0;
   const investimentoTotal = gasto + imposto;
   const custoAds = impostoAtivo ? investimentoTotal : gasto;
 
@@ -251,25 +422,12 @@ export function DashboardFinanceGrid() {
         value={formatCurrency(cpaMedio)}
         subtext="Custo por aquisição"
       />
-      <FinanceCard
-        label="Imposto Meta Ads"
-        icon={Megaphone}
-        iconBg="bg-gray-100"
-        iconColor="text-gray-600"
-        value={formatCurrency(imposto)}
-        subtext={impostoAtivo ? "Ativado" : "Desativado"}
-        headerExtra={
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
-              Imposto Meta Ads
-            </span>
-            <Pencil size={12} className="text-gray-400" />
-            <ImpostoToggle active={impostoAtivo} onChange={toggleImposto} />
-            <span className="text-[10px] font-semibold uppercase text-gray-400">
-              {impostoAtivo ? "ON" : "OFF"}
-            </span>
-          </div>
-        }
+      <ImpostoMetaAdsCard
+        imposto={imposto}
+        impostoAtivo={impostoAtivo}
+        percentual={impostoPercentual}
+        onToggle={toggleImposto}
+        onPercentualChange={saveImpostoPercentual}
       />
       <FinanceCard
         label="Investimento Total"
