@@ -19,7 +19,8 @@ const TABS: { id: KanbanOperationType; label: string }[] = [
 ];
 
 const EMPTY_COLUMNS: KanbanColumns = {
-  chegou: [],
+  pedidos_criados: [],
+  em_transito: [],
   retirar_correios: [],
   pagos: [],
   devolvidos: [],

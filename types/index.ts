@@ -66,7 +66,8 @@ export interface PaymentRow {
 // ─── Orders / Kanban ─────────────────────────────────────────────────────────
 
 export type KanbanColumn =
-  | "chegou"
+  | "pedidos_criados"
+  | "em_transito"
   | "retirar_correios"
   | "pagos"
   | "devolvidos"

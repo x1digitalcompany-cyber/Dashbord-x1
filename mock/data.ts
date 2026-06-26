@@ -49,7 +49,7 @@ export const MOCK_PAYMENTS: PaymentRow[] = [
 ];
 
 export const MOCK_KANBAN: KanbanColumns = {
-  chegou: [
+  pedidos_criados: [
     {
       id: "o1",
       orderNumber: "#10481",
@@ -59,7 +59,7 @@ export const MOCK_KANBAN: KanbanColumns = {
       customerCpf: "123.456.789-00",
       value: 297.0,
       paymentMethod: "PIX",
-      status: "chegou",
+      status: "pedidos_criados",
       productName: "Cápsula Slim Pro",
       sellerName: "Ana Paula",
       createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
@@ -73,6 +73,21 @@ export const MOCK_KANBAN: KanbanColumns = {
       },
     },
     {
+      id: "o3",
+      orderNumber: "#10483",
+      customerName: "Patrícia Nunes",
+      customerEmail: "patricia@email.com",
+      customerPhone: "(31) 96543-2109",
+      customerCpf: "456.789.123-00",
+      value: 397.0,
+      paymentMethod: "PIX",
+      status: "pedidos_criados",
+      productName: "Kit Emagrecimento Total",
+      createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    },
+  ],
+  em_transito: [
+    {
       id: "o2",
       orderNumber: "#10482",
       customerName: "Ricardo Gomes",
@@ -81,9 +96,10 @@ export const MOCK_KANBAN: KanbanColumns = {
       customerCpf: "987.654.321-00",
       value: 197.0,
       paymentMethod: "CARD",
-      status: "chegou",
+      status: "em_transito",
       productName: "Cápsula Detox",
       sellerName: "Carlos Souza",
+      trackingCode: "BR999888777BR",
       createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
       address: {
         street: "Av. Brasil",
@@ -93,19 +109,6 @@ export const MOCK_KANBAN: KanbanColumns = {
         state: "RJ",
         zipCode: "20040-020",
       },
-    },
-    {
-      id: "o3",
-      orderNumber: "#10483",
-      customerName: "Patrícia Nunes",
-      customerEmail: "patricia@email.com",
-      customerPhone: "(31) 96543-2109",
-      customerCpf: "456.789.123-00",
-      value: 397.0,
-      paymentMethod: "PIX",
-      status: "chegou",
-      productName: "Kit Emagrecimento Total",
-      createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
     },
   ],
   retirar_correios: [

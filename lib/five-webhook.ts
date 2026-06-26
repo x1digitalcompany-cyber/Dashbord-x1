@@ -231,17 +231,21 @@ export function decideFiveColumn(
 function mapKanbanToInternal(kanban: KanbanColumn | null): FiveInternalColumn | null {
   if (!kanban) return null;
   const map: Record<KanbanColumn, FiveInternalColumn> = {
-    chegou: "Pedido Criado",
+    pedidos_criados:  "Pedido Criado",
+    em_transito:      "Transito",
     retirar_correios: "Retirar Correios",
-    pagos: "Entregue",
-    devolvidos: "Devolvido",
-    inadimplentes: "Cobrança",
+    pagos:            "Entregue",
+    devolvidos:       "Devolvido",
+    inadimplentes:    "Cobrança",
   };
   return map[kanban] ?? null;
 }
 
 export function mapFiveColumnToKanban(column: FiveInternalColumn): KanbanColumn {
   switch (column) {
+    case "Transito":
+    case "Saiu para entrega":
+      return "em_transito";
     case "Retirar Correios":
       return "retirar_correios";
     case "Entregue":
@@ -252,8 +256,8 @@ export function mapFiveColumnToKanban(column: FiveInternalColumn): KanbanColumn 
       return "devolvidos";
     case "Cobrança":
       return "inadimplentes";
-    default:
-      return "chegou";
+    default:           // "Pedido Criado"
+      return "pedidos_criados";
   }
 }
 

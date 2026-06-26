@@ -5,7 +5,8 @@ import { AGENDADO_PAYMENT_TYPES } from "@/lib/five-webhook";
 import type { KanbanColumn, KanbanColumns, KanbanOrder } from "@/types";
 
 const VALID_COLUMNS: KanbanColumn[] = [
-  "chegou",
+  "pedidos_criados",
+  "em_transito",
   "retirar_correios",
   "pagos",
   "devolvidos",
@@ -41,7 +42,8 @@ export async function GET(req: NextRequest) {
     if (error) throw error;
 
     const columns: KanbanColumns = {
-      chegou:           [],
+      pedidos_criados:  [],
+      em_transito:      [],
       retirar_correios: [],
       pagos:            [],
       devolvidos:       [],
@@ -51,7 +53,7 @@ export async function GET(req: NextRequest) {
     for (const o of orders ?? []) {
       const col = (VALID_COLUMNS.includes(o.kanban_status as KanbanColumn)
         ? o.kanban_status
-        : "chegou") as KanbanColumn;
+        : "pedidos_criados") as KanbanColumn;
 
       const rawOrderNum: string = o.order_number ?? "";
       const card: KanbanOrder = {

@@ -13,10 +13,12 @@ import {
   useDraggable,
 } from "@dnd-kit/core";
 import {
-  Package,
+  PackagePlus,
   Truck,
+  MapPin,
   CheckCircle2,
   RotateCcw,
+  AlertCircle,
   AlertTriangle,
   Search,
   X,
@@ -24,7 +26,6 @@ import {
   CreditCard,
   QrCode,
   FileText,
-  MapPin,
 } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
@@ -44,39 +45,46 @@ interface ColumnDef {
 
 const COLUMNS: ColumnDef[] = [
   {
-    id: "chegou",
-    label: "Chegou",
+    id: "pedidos_criados",
+    label: "Pedidos Criados",
     headerBg: "bg-blue-50",
-    dotColor: "bg-blue-500",
-    Icon: Package,
+    dotColor: "bg-[#3B8BD4]",
+    Icon: PackagePlus,
+  },
+  {
+    id: "em_transito",
+    label: "Em Trânsito",
+    headerBg: "bg-violet-50",
+    dotColor: "bg-[#7C3AED]",
+    Icon: Truck,
   },
   {
     id: "retirar_correios",
-    label: "Retirar nos Correios",
+    label: "Retirar Correios",
     headerBg: "bg-amber-50",
-    dotColor: "bg-amber-500",
-    Icon: Truck,
+    dotColor: "bg-[#EF9F27]",
+    Icon: MapPin,
   },
   {
     id: "pagos",
     label: "Pagos",
-    headerBg: "bg-emerald-50",
-    dotColor: "bg-emerald-500",
+    headerBg: "bg-green-50",
+    dotColor: "bg-[#639922]",
     Icon: CheckCircle2,
   },
   {
     id: "devolvidos",
     label: "Devolvidos",
     headerBg: "bg-red-50",
-    dotColor: "bg-red-500",
+    dotColor: "bg-[#A32D2D]",
     Icon: RotateCcw,
   },
   {
     id: "inadimplentes",
     label: "Inadimplentes",
     headerBg: "bg-rose-50",
-    dotColor: "bg-rose-600",
-    Icon: AlertTriangle,
+    dotColor: "bg-[#993556]",
+    Icon: AlertCircle,
   },
 ];
 
@@ -86,12 +94,13 @@ const PAYMENT_ICON: Record<string, React.ElementType> = {
   BOLETO: FileText,
 };
 
-const STATUS_BADGE_VARIANT: Record<KanbanColumn, "blue" | "amber" | "green" | "red" | "rose"> = {
-  chegou: "blue",
+const STATUS_BADGE_VARIANT: Record<KanbanColumn, "blue" | "violet" | "amber" | "green" | "red" | "rose"> = {
+  pedidos_criados:  "blue",
+  em_transito:      "violet",
   retirar_correios: "amber",
-  pagos: "green",
-  devolvidos: "red",
-  inadimplentes: "rose",
+  pagos:            "green",
+  devolvidos:       "red",
+  inadimplentes:    "rose",
 };
 
 // ─── KanbanCard ───────────────────────────────────────────────────────────────
@@ -427,7 +436,7 @@ export function KanbanFive({ data, loading, error, title = "Kanban Five", onMove
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <Skeleton className="h-5 w-40 mb-4" />
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-6 gap-3">
           {COLUMNS.map((c) => (
             <div key={c.id} className="space-y-2">
               <Skeleton className="h-9 w-full rounded-xl" />
@@ -494,7 +503,7 @@ export function KanbanFive({ data, loading, error, title = "Kanban Five", onMove
         </div>
 
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-6 gap-3">
             {COLUMNS.map((col) => (
               <KanbanColumnComponent
                 key={col.id}
