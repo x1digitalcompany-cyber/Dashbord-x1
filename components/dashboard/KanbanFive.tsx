@@ -38,59 +38,24 @@ import type { KanbanColumn, KanbanColumns, KanbanOrder } from "@/types";
 interface ColumnDef {
   id: KanbanColumn;
   label: string;
+  shortLabel: string;
   headerBg: string;
   dotColor: string;
   Icon: React.ElementType;
 }
 
 const COLUMNS: ColumnDef[] = [
-  {
-    id: "pedidos_criados",
-    label: "Pedidos Criados",
-    headerBg: "bg-blue-50",
-    dotColor: "bg-[#3B8BD4]",
-    Icon: PackagePlus,
-  },
-  {
-    id: "em_transito",
-    label: "Em Trânsito",
-    headerBg: "bg-violet-50",
-    dotColor: "bg-[#7C3AED]",
-    Icon: Truck,
-  },
-  {
-    id: "retirar_correios",
-    label: "Retirar Correios",
-    headerBg: "bg-amber-50",
-    dotColor: "bg-[#EF9F27]",
-    Icon: MapPin,
-  },
-  {
-    id: "pagos",
-    label: "Pagos",
-    headerBg: "bg-green-50",
-    dotColor: "bg-[#639922]",
-    Icon: CheckCircle2,
-  },
-  {
-    id: "devolvidos",
-    label: "Devolvidos",
-    headerBg: "bg-red-50",
-    dotColor: "bg-[#A32D2D]",
-    Icon: RotateCcw,
-  },
-  {
-    id: "inadimplentes",
-    label: "Inadimplentes",
-    headerBg: "bg-rose-50",
-    dotColor: "bg-[#993556]",
-    Icon: AlertCircle,
-  },
+  { id: "pedidos_criados",  label: "Pedidos Criados",  shortLabel: "Criados",     headerBg: "bg-blue-50",   dotColor: "bg-[#3B8BD4]", Icon: PackagePlus },
+  { id: "em_transito",      label: "Em Trânsito",      shortLabel: "Em Trânsito", headerBg: "bg-violet-50", dotColor: "bg-[#7C3AED]", Icon: Truck },
+  { id: "retirar_correios", label: "Retirar Correios", shortLabel: "Correios",    headerBg: "bg-amber-50",  dotColor: "bg-[#EF9F27]", Icon: MapPin },
+  { id: "pagos",            label: "Pagos",            shortLabel: "Pagos",       headerBg: "bg-green-50",  dotColor: "bg-[#639922]", Icon: CheckCircle2 },
+  { id: "devolvidos",       label: "Devolvidos",       shortLabel: "Devolvidos",  headerBg: "bg-red-50",    dotColor: "bg-[#A32D2D]", Icon: RotateCcw },
+  { id: "inadimplentes",    label: "Inadimplentes",    shortLabel: "Inadimp.",    headerBg: "bg-rose-50",   dotColor: "bg-[#993556]", Icon: AlertCircle },
 ];
 
 const PAYMENT_ICON: Record<string, React.ElementType> = {
-  PIX: QrCode,
-  CARD: CreditCard,
+  PIX:    QrCode,
+  CARD:   CreditCard,
   BOLETO: FileText,
 };
 
@@ -115,7 +80,6 @@ function KanbanCard({
   isDragging?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: order.id });
-  const PayIcon = PAYMENT_ICON[order.paymentMethod] ?? CreditCard;
   const shortId = order.displayId ?? order.orderNumber.slice(-8).toUpperCase();
 
   return (
@@ -125,47 +89,48 @@ function KanbanCard({
       {...attributes}
       style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined}
       className={cn(
-        "bg-white rounded-xl border border-gray-100 shadow-sm p-3 cursor-grab active:cursor-grabbing select-none transition-shadow",
+        "bg-white rounded-xl border border-gray-100 shadow-sm p-3 cursor-grab active:cursor-grabbing select-none transition-shadow hover:shadow-md",
         isDragging && "opacity-40"
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className="text-xs font-bold text-indigo-600">#{shortId}</span>
-            <PayIcon size={11} className="text-gray-400 shrink-0" />
-          </div>
-          <p className="text-sm font-medium text-gray-900 truncate">{order.customerName}</p>
-          {order.sellerName && (
-            <p className="text-xs text-gray-400 truncate">Vendedor: {order.sellerName}</p>
-          )}
-        </div>
-        <div className="text-right shrink-0">
-          <p className="text-sm font-bold text-gray-900 tabular-nums">
-            {formatCurrency(order.value)}
-          </p>
-          <p className="text-xs text-gray-400 mt-0.5">{timeAgo(order.updatedAt ?? order.createdAt)}</p>
-        </div>
+      {/* Linha 1: #ID à esquerda · Valor à direita */}
+      <div className="flex items-center justify-between gap-1 mb-1.5">
+        <span className="text-xs font-bold text-indigo-600">#{shortId}</span>
+        <span className="text-xs font-bold text-gray-900 tabular-nums shrink-0">
+          {formatCurrency(order.value)}
+        </span>
       </div>
 
+      {/* Linha 2: Nome do cliente */}
+      <p className="text-sm font-medium text-gray-900 truncate mb-1">
+        {order.customerName}
+      </p>
+
+      {/* Linha 3: Código de rastreio (se existir) */}
       {order.trackingCode && (
-        <div className="mt-2 pt-2 border-t border-gray-50 flex items-center gap-1 text-xs text-gray-400">
-          <Truck size={11} />
+        <div className="flex items-center gap-1 mb-1 text-xs text-gray-400">
+          <Truck size={11} className="shrink-0" />
           <span className="font-mono truncate">{order.trackingCode}</span>
         </div>
       )}
 
-      <button
-        onClick={(e) => { e.stopPropagation(); onClick(); }}
-        className="mt-2 w-full text-xs text-indigo-500 hover:text-indigo-700 hover:underline text-left transition-colors"
-      >
-        Ver detalhes →
-      </button>
+      {/* Linha 4: Tempo atrás · Ver detalhes */}
+      <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-gray-50">
+        <span className="text-xs text-gray-400">
+          {timeAgo(order.updatedAt ?? order.createdAt)}
+        </span>
+        <button
+          onClick={(e) => { e.stopPropagation(); onClick(); }}
+          className="text-xs text-indigo-500 hover:text-indigo-700 hover:underline transition-colors"
+        >
+          Ver detalhes →
+        </button>
+      </div>
     </div>
   );
 }
 
-// ─── KanbanColumn ─────────────────────────────────────────────────────────────
+// ─── KanbanColumnComponent ────────────────────────────────────────────────────
 
 function KanbanColumnComponent({
   column,
@@ -193,14 +158,15 @@ function KanbanColumnComponent({
   );
 
   return (
-    <div className="flex flex-col min-w-0 w-full">
-      <div className={cn("flex items-center gap-2 px-3 py-2.5 rounded-xl mb-2", column.headerBg)}>
+    <div className="flex flex-col w-full">
+      {/* Cabeçalho com shortLabel para não cortar */}
+      <div className={cn("flex items-center gap-1.5 px-2.5 py-2 rounded-xl mb-2", column.headerBg)}>
         <span className={cn("w-2 h-2 rounded-full shrink-0", column.dotColor)} />
-        <column.Icon size={13} className="text-gray-600 shrink-0" />
-        <span className="text-xs font-semibold text-gray-700 truncate flex-1">
-          {column.label}
+        <column.Icon size={12} className="text-gray-600 shrink-0" />
+        <span className="text-xs font-semibold text-gray-700 flex-1 min-w-0 leading-tight">
+          {column.shortLabel}
         </span>
-        <span className="text-xs font-bold text-gray-500 bg-white/70 rounded-full px-1.5 py-0.5">
+        <span className="text-xs font-bold text-gray-500 bg-white/70 rounded-full px-1.5 py-0.5 shrink-0">
           {filtered.length}
         </span>
       </div>
@@ -244,9 +210,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function OrderDetailModal({ order, onClose }: { order: KanbanOrder | null; onClose: () => void }) {
   if (!order) return null;
   const PayIcon = PAYMENT_ICON[order.paymentMethod] ?? CreditCard;
+  const displayId = order.displayId ?? order.orderNumber.slice(-8).toUpperCase();
 
   return (
-    <Modal open={!!order} onClose={onClose} title={`#${order.displayId ?? order.orderNumber.slice(-8).toUpperCase()}`}>
+    <Modal open={!!order} onClose={onClose} title={`#${displayId}`}>
       <div className="space-y-4 text-sm">
 
         {/* Status + valor */}
@@ -270,9 +237,7 @@ function OrderDetailModal({ order, onClose }: { order: KanbanOrder | null; onClo
           <Field label="E-mail">
             <span className="truncate block">{order.customerEmail || "—"}</span>
           </Field>
-          <Field label="Telefone">
-            {order.customerPhone || "—"}
-          </Field>
+          <Field label="Telefone">{order.customerPhone || "—"}</Field>
         </div>
 
         {/* Produto */}
@@ -280,15 +245,11 @@ function OrderDetailModal({ order, onClose }: { order: KanbanOrder | null; onClo
           <Field label="Produto">
             <span className="font-medium text-gray-900">{order.productName}</span>
           </Field>
-          {order.offerTitle && (
-            <Field label="Oferta">{order.offerTitle}</Field>
-          )}
-          {order.projectName && (
-            <Field label="Projeto">{order.projectName}</Field>
-          )}
+          {order.offerTitle && <Field label="Oferta">{order.offerTitle}</Field>}
+          {order.projectName && <Field label="Projeto">{order.projectName}</Field>}
         </div>
 
-        {/* Vendedor + pagamento + data */}
+        {/* Vendedor + pagamento + datas */}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Vendedor">{order.sellerName ?? "—"}</Field>
           <Field label="Pagamento">
@@ -338,7 +299,8 @@ function OrderDetailModal({ order, onClose }: { order: KanbanOrder | null; onClo
             {order.address && (
               <>
                 <p className="text-gray-700">
-                  {order.address.street}{order.address.number ? `, ${order.address.number}` : ""}
+                  {order.address.street}
+                  {order.address.number ? `, ${order.address.number}` : ""}
                   {order.address.complement ? ` — ${order.address.complement}` : ""}
                 </p>
                 <p className="text-gray-500 text-xs mt-0.5">
@@ -374,10 +336,30 @@ export function KanbanFive({ data, loading, error, title = "Kanban Five", onMove
   const [search, setSearch] = useState("");
   const [moveError, setMoveError] = useState<string | null>(null);
 
-  // Sync: sempre que o pai passa novos dados, atualiza o estado interno
+  // Scroll indicator state
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+
   useEffect(() => {
     if (data !== null) setColumns(data);
   }, [data]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const check = () => {
+      setCanScrollLeft(el.scrollLeft > 8);
+      setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 8);
+    };
+    check();
+    el.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check);
+    return () => {
+      el.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+    };
+  }, [loading]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -415,16 +397,13 @@ export function KanbanFive({ data, loading, error, title = "Kanban Five", onMove
     const targetCol = over.id as KanbanColumn;
     if (found.col === targetCol) return;
 
-    // Salva estado anterior para rollback
     const prevColumns = columns;
 
-    // Atualização otimista
     const next = { ...columns };
     next[found.col] = next[found.col].filter((o) => o.id !== active.id);
     next[targetCol] = [{ ...found.order, status: targetCol }, ...next[targetCol]];
     setColumns(next);
 
-    // Persiste no banco — rollback em caso de falha
     onMove?.(active.id as string, targetCol)?.catch(() => {
       setColumns(prevColumns);
       setMoveError("Falha ao mover pedido — alteração revertida");
@@ -436,9 +415,9 @@ export function KanbanFive({ data, loading, error, title = "Kanban Five", onMove
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <Skeleton className="h-5 w-40 mb-4" />
-        <div className="grid grid-cols-6 gap-3">
+        <div className="flex gap-3 overflow-hidden">
           {COLUMNS.map((c) => (
-            <div key={c.id} className="space-y-2">
+            <div key={c.id} className="space-y-2 min-w-[200px] flex-1">
               <Skeleton className="h-9 w-full rounded-xl" />
               <Skeleton className="h-24 w-full rounded-xl" />
               <Skeleton className="h-20 w-full rounded-xl" />
@@ -466,6 +445,7 @@ export function KanbanFive({ data, loading, error, title = "Kanban Five", onMove
   return (
     <>
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
@@ -480,7 +460,6 @@ export function KanbanFive({ data, loading, error, title = "Kanban Five", onMove
                 {moveError}
               </span>
             )}
-
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -502,34 +481,51 @@ export function KanbanFive({ data, loading, error, title = "Kanban Five", onMove
           </div>
         </div>
 
-        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className="grid grid-cols-6 gap-3">
-            {COLUMNS.map((col) => (
-              <KanbanColumnComponent
-                key={col.id}
-                column={col}
-                orders={currentColumns[col.id] ?? []}
-                search={search}
-                onCardClick={setSelectedOrder}
-                activeId={activeId}
-              />
-            ))}
-          </div>
+        {/* Scroll container com indicadores de gradiente */}
+        <div className="relative">
+          {canScrollLeft && (
+            <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-10 bg-gradient-to-r from-white to-transparent z-10 rounded-l-xl" />
+          )}
+          {canScrollRight && (
+            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-white to-transparent z-10 rounded-r-xl" />
+          )}
 
-          <DragOverlay>
-            {activeOrder && (
-              <div className="bg-white rounded-xl border border-indigo-200 shadow-xl p-3 rotate-2 opacity-95">
-                <p className="text-xs font-bold text-indigo-600">
-                  #{activeOrder.displayId ?? activeOrder.orderNumber.slice(-8).toUpperCase()}
-                </p>
-                <p className="text-sm font-medium text-gray-900">{activeOrder.customerName}</p>
-                <p className="text-sm font-bold text-gray-900 tabular-nums">
-                  {formatCurrency(activeOrder.value)}
-                </p>
+          <div
+            ref={scrollRef}
+            className="overflow-x-auto pb-1"
+            style={{ scrollbarWidth: "thin", scrollbarColor: "#e5e7eb transparent" }}
+          >
+            <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+              {/* min-w garante 200px por coluna × 6 + gaps */}
+              <div className="grid grid-cols-6 gap-3 min-w-[1260px]">
+                {COLUMNS.map((col) => (
+                  <KanbanColumnComponent
+                    key={col.id}
+                    column={col}
+                    orders={currentColumns[col.id] ?? []}
+                    search={search}
+                    onCardClick={setSelectedOrder}
+                    activeId={activeId}
+                  />
+                ))}
               </div>
-            )}
-          </DragOverlay>
-        </DndContext>
+
+              <DragOverlay>
+                {activeOrder && (
+                  <div className="bg-white rounded-xl border border-indigo-200 shadow-xl p-3 rotate-2 opacity-95">
+                    <p className="text-xs font-bold text-indigo-600">
+                      #{activeOrder.displayId ?? activeOrder.orderNumber.slice(-8).toUpperCase()}
+                    </p>
+                    <p className="text-sm font-medium text-gray-900">{activeOrder.customerName}</p>
+                    <p className="text-sm font-bold text-gray-900 tabular-nums">
+                      {formatCurrency(activeOrder.value)}
+                    </p>
+                  </div>
+                )}
+              </DragOverlay>
+            </DndContext>
+          </div>
+        </div>
       </div>
 
       <OrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
