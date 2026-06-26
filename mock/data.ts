@@ -30,6 +30,12 @@ export const MOCK_KPI: KpiData = {
     transactions: 198,
     variationPct: -5.1,
   },
+  finance: {
+    faturamentoTotal: 98420.5,
+    gastoAnuncios: 14823.4,
+    totalVendas: 198,
+    agendamentosCriados: 87,
+  },
 };
 
 export const MOCK_SELLERS: SellerAgendamento[] = [

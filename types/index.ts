@@ -44,6 +44,12 @@ export interface KpiData {
     transactions: number;
     variationPct: number;
   };
+  finance: {
+    faturamentoTotal: number;
+    gastoAnuncios: number;
+    totalVendas: number;
+    agendamentosCriados: number;
+  };
 }
 
 // ─── Sellers / Agendamentos ───────────────────────────────────────────────────

@@ -1,9 +1,8 @@
 "use client";
 
-import { FinanceKpiGrid } from "@/components/dashboard/FinanceKpiGrid";
+import { DashboardFinanceGrid } from "@/components/dashboard/DashboardFinanceGrid";
 import { FinanceCharts } from "@/components/dashboard/FinanceCharts";
 import { StateMapsSection } from "@/components/dashboard/StateMapsSection";
-import { MetaAdsSummaryRow } from "@/components/dashboard/meta-ads/MetaAdsSummaryRow";
 import { useFetchOnFilters } from "@/contexts/DashboardFiltersContext";
 import type { FinanceiroData, EstadoMetric } from "@/types";
 
@@ -26,18 +25,7 @@ export default function DashboardPage() {
   return (
     <div className="mx-auto max-w-[1600px] space-y-8">
       <section>
-        <MetaAdsSummaryRow />
-      </section>
-
-      <section>
-        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
-          KPIs Financeiros
-        </h2>
-        <FinanceKpiGrid
-          data={financeiro.data}
-          loading={financeiro.loading}
-          error={financeiro.error}
-        />
+        <DashboardFinanceGrid />
       </section>
 
       <section>

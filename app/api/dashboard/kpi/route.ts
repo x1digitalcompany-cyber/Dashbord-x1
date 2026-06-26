@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { parseFromToParams } from "@/lib/period";
 import { parseSellerParam } from "@/lib/seller-filter";
 import { fetchMetaAdsInsights } from "@/lib/api/meta-ads";
+import { REVENUE_STATUSES, SALE_STATUS, round2 } from "@/lib/finance";
 import type { KpiData } from "@/types";
 
 function prevPeriod(from: Date, to: Date) {
@@ -19,6 +20,25 @@ function metaDate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
+interface OrderRow {
+  value: number;
+  kanban_status: string;
+}
+
+function sumRevenue(orders: OrderRow[]): number {
+  return round2(
+    orders
+      .filter((o) =>
+        REVENUE_STATUSES.includes(o.kanban_status as (typeof REVENUE_STATUSES)[number])
+      )
+      .reduce((s, o) => s + Number(o.value), 0)
+  );
+}
+
+function countSales(orders: OrderRow[]): number {
+  return orders.filter((o) => o.kanban_status === SALE_STATUS).length;
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const { from, to } = parseFromToParams(searchParams);
@@ -26,93 +46,153 @@ export async function GET(req: NextRequest) {
   const sellerName = parseSellerParam(searchParams);
 
   try {
-    const fromISO     = from.toISOString();
-    const toISO       = to.toISOString();
+    const fromISO = from.toISOString();
+    const toISO = to.toISOString();
     const prevFromISO = prev.from.toISOString();
-    const prevToISO   = prev.to.toISOString();
+    const prevToISO = prev.to.toISOString();
 
-    let agendQ = supabase.from("orders").select("id", { count: "exact", head: true })
+    let ordersQ = supabase
+      .from("orders")
+      .select("value, kanban_status")
       .neq("customer_email", "cliente@example.com")
       .not("customer_name", "ilike", "%cliente fict%")
-      .gte("created_at", fromISO).lte("created_at", toISO);
-    if (sellerName) agendQ = agendQ.eq("seller_name", sellerName);
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO);
+    if (sellerName) ordersQ = ordersQ.eq("seller_name", sellerName);
 
-    let agendPrevQ = supabase.from("orders").select("id", { count: "exact", head: true })
+    let agendLegacyQ = supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
       .neq("customer_email", "cliente@example.com")
       .not("customer_name", "ilike", "%cliente fict%")
-      .gte("created_at", prevFromISO).lte("created_at", prevToISO);
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO);
+    if (sellerName) agendLegacyQ = agendLegacyQ.eq("seller_name", sellerName);
+
+    let agendCriadosQ = supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("payment_type", "agendado")
+      .eq("kanban_status", "pedidos_criados")
+      .neq("customer_email", "cliente@example.com")
+      .not("customer_name", "ilike", "%cliente fict%")
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO);
+    if (sellerName) agendCriadosQ = agendCriadosQ.eq("seller_name", sellerName);
+
+    let agendPrevQ = supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .neq("customer_email", "cliente@example.com")
+      .not("customer_name", "ilike", "%cliente fict%")
+      .gte("created_at", prevFromISO)
+      .lte("created_at", prevToISO);
     if (sellerName) agendPrevQ = agendPrevQ.eq("seller_name", sellerName);
 
-    let pagarmeQ = supabase.from("orders").select("value")
-      .eq("gateway", "pagarme").eq("kanban_status", "pagos")
+    let pagarmeQ = supabase
+      .from("orders")
+      .select("value")
+      .eq("gateway", "pagarme")
+      .eq("kanban_status", "pagos")
       .neq("customer_email", "cliente@example.com")
       .not("customer_name", "ilike", "%cliente fict%")
-      .gte("created_at", fromISO).lte("created_at", toISO);
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO);
     if (sellerName) pagarmeQ = pagarmeQ.eq("seller_name", sellerName);
 
-    let pagarmePrevQ = supabase.from("orders").select("value")
-      .eq("gateway", "pagarme").eq("kanban_status", "pagos")
+    let pagarmePrevQ = supabase
+      .from("orders")
+      .select("value")
+      .eq("gateway", "pagarme")
+      .eq("kanban_status", "pagos")
       .neq("customer_email", "cliente@example.com")
       .not("customer_name", "ilike", "%cliente fict%")
-      .gte("created_at", prevFromISO).lte("created_at", prevToISO);
+      .gte("created_at", prevFromISO)
+      .lte("created_at", prevToISO);
     if (sellerName) pagarmePrevQ = pagarmePrevQ.eq("seller_name", sellerName);
 
-    let paytQ = supabase.from("orders").select("value")
-      .eq("gateway", "payt").eq("kanban_status", "pagos")
+    let paytQ = supabase
+      .from("orders")
+      .select("value")
+      .eq("gateway", "payt")
+      .eq("kanban_status", "pagos")
       .neq("customer_email", "cliente@example.com")
       .not("customer_name", "ilike", "%cliente fict%")
-      .gte("created_at", fromISO).lte("created_at", toISO);
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO);
     if (sellerName) paytQ = paytQ.eq("seller_name", sellerName);
 
-    let paytPrevQ = supabase.from("orders").select("value")
-      .eq("gateway", "payt").eq("kanban_status", "pagos")
+    let paytPrevQ = supabase
+      .from("orders")
+      .select("value")
+      .eq("gateway", "payt")
+      .eq("kanban_status", "pagos")
       .neq("customer_email", "cliente@example.com")
       .not("customer_name", "ilike", "%cliente fict%")
-      .gte("created_at", prevFromISO).lte("created_at", prevToISO);
+      .gte("created_at", prevFromISO)
+      .lte("created_at", prevToISO);
     if (sellerName) paytPrevQ = paytPrevQ.eq("seller_name", sellerName);
 
     const [
-      agendRes, agendPrevRes,
-      pagarmeRes, pagarmePrevRes,
-      paytRes, paytPrevRes,
-      leadsRes, leadsPrevRes,
-      adSpendRes, adSpendPrevRes,
+      ordersRes,
+      agendCriadosRes,
+      agendRes,
+      agendPrevRes,
+      pagarmeRes,
+      pagarmePrevRes,
+      paytRes,
+      paytPrevRes,
+      leadsRes,
+      leadsPrevRes,
+      adSpendRes,
+      adSpendPrevRes,
     ] = await Promise.all([
-      agendQ,
+      ordersQ,
+      agendCriadosQ,
+      agendLegacyQ,
       agendPrevQ,
       pagarmeQ,
       pagarmePrevQ,
       paytQ,
       paytPrevQ,
-      supabase.from("leads").select("id", { count: "exact", head: true })
-        .gte("created_at", fromISO).lte("created_at", toISO),
-      supabase.from("leads").select("id", { count: "exact", head: true })
-        .gte("created_at", prevFromISO).lte("created_at", prevToISO),
-      supabase.from("ad_spend").select("spend, currency")
-        .gte("date", metaDate(from)).lte("date", metaDate(to)),
-      supabase.from("ad_spend").select("spend, currency")
-        .gte("date", metaDate(prev.from)).lte("date", metaDate(prev.to)),
+      supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", fromISO)
+        .lte("created_at", toISO),
+      supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", prevFromISO)
+        .lte("created_at", prevToISO),
+      supabase
+        .from("ad_spend")
+        .select("spend, currency")
+        .gte("date", metaDate(from))
+        .lte("date", metaDate(to)),
+      supabase
+        .from("ad_spend")
+        .select("spend, currency")
+        .gte("date", metaDate(prev.from))
+        .lte("date", metaDate(prev.to)),
     ]);
 
-    // ── Agendamentos ──────────────────────────────────────────────────────────
+    const orders = (ordersRes.data ?? []) as OrderRow[];
+    const agendamentosCriados = agendCriadosRes.count ?? 0;
     const currAgend = agendRes.count ?? 0;
     const prevAgend = agendPrevRes.count ?? 0;
 
-    // ── Pagar.me ──────────────────────────────────────────────────────────────
-    const pagarmeVol     = (pagarmeRes.data ?? []).reduce((s, r) => s + Number(r.value), 0);
+    const pagarmeVol = (pagarmeRes.data ?? []).reduce((s, r) => s + Number(r.value), 0);
     const pagarmePrevVol = (pagarmePrevRes.data ?? []).reduce((s, r) => s + Number(r.value), 0);
-    const pagarmeCount   = pagarmeRes.data?.length ?? 0;
+    const pagarmeCount = pagarmeRes.data?.length ?? 0;
 
-    // ── Payt ──────────────────────────────────────────────────────────────────
-    const paytVol     = (paytRes.data ?? []).reduce((s, r) => s + Number(r.value), 0);
+    const paytVol = (paytRes.data ?? []).reduce((s, r) => s + Number(r.value), 0);
     const paytPrevVol = (paytPrevRes.data ?? []).reduce((s, r) => s + Number(r.value), 0);
-    const paytCount   = paytRes.data?.length ?? 0;
+    const paytCount = paytRes.data?.length ?? 0;
 
-    // ── Leads ─────────────────────────────────────────────────────────────────
     const leadsTotal = leadsRes.count ?? 0;
-    const leadsPrev  = leadsPrevRes.count ?? 0;
+    const leadsPrev = leadsPrevRes.count ?? 0;
 
-    // ── Ads spend — Meta API via lib/api/meta-ads (v19.0) ───────────────────
     const [metaCurr, metaPrev] = await Promise.all([
       fetchMetaAdsInsights(from, to).catch(() => null),
       fetchMetaAdsInsights(prev.from, prev.to).catch(() => null),
@@ -142,28 +222,37 @@ export async function GET(req: NextRequest) {
 
     const kpi: KpiData = {
       ads: {
-        totalSpend:   adsSpend,
+        totalSpend: adsSpend,
         variationPct: pct(adsSpend, adsPrevSpend),
       },
       leads: {
-        total:        metaLeads > 0 ? metaLeads : leadsTotal,
+        total: metaLeads > 0 ? metaLeads : leadsTotal,
         cpl,
-        variationPct: pct(metaLeads > 0 ? metaLeads : leadsTotal, metaLeadsPrev > 0 ? metaLeadsPrev : leadsPrev),
+        variationPct: pct(
+          metaLeads > 0 ? metaLeads : leadsTotal,
+          metaLeadsPrev > 0 ? metaLeadsPrev : leadsPrev
+        ),
       },
       agendamentos: {
-        total:          currAgend,
+        total: currAgend,
         conversionRate: leadsTotal > 0 ? Math.round((currAgend / leadsTotal) * 1000) / 10 : 0,
-        variationPct:   pct(currAgend, prevAgend),
+        variationPct: pct(currAgend, prevAgend),
       },
       payt: {
-        volume:       paytVol,
+        volume: paytVol,
         transactions: paytCount,
         variationPct: pct(paytVol, paytPrevVol),
       },
       pagarme: {
-        volume:       pagarmeVol,
+        volume: pagarmeVol,
         transactions: pagarmeCount,
         variationPct: pct(pagarmeVol, pagarmePrevVol),
+      },
+      finance: {
+        faturamentoTotal: sumRevenue(orders),
+        gastoAnuncios: round2(adsSpend),
+        totalVendas: countSales(orders),
+        agendamentosCriados,
       },
     };
 
