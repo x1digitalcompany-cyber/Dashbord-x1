@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { fetchMetaAdsInsights } from "@/lib/api/meta-ads";
-import {
-  pctChange,
-  prevPeriod,
-  round2,
-  safeDivide,
-  REVENUE_STATUSES,
-  SALE_STATUS,
-} from "@/lib/finance";
+import { pctChange, prevPeriod, round2, safeDivide, REVENUE_STATUSES, SALE_STATUS } from "@/lib/finance";
+import { parseSellerParam } from "@/lib/seller-filter";
 import type { FinanceiroData } from "@/types";
 
 interface OrderRow {
@@ -122,6 +116,7 @@ export async function GET(req: NextRequest) {
   const from = new Date(searchParams.get("from") ?? Date.now() - 30 * 86400000);
   const to = new Date(searchParams.get("to") ?? Date.now());
   const prev = prevPeriod(from, to);
+  const sellerName = parseSellerParam(searchParams);
 
   const fromISO = from.toISOString();
   const toISO = to.toISOString();
@@ -129,22 +124,28 @@ export async function GET(req: NextRequest) {
   const prevToISO = prev.to.toISOString();
 
   try {
+    let ordersQ = supabase
+      .from("orders")
+      .select("value, kanban_status, payment_type, created_at")
+      .neq("customer_email", "cliente@example.com")
+      .not("customer_name", "ilike", "%cliente fict%")
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO);
+    if (sellerName) ordersQ = ordersQ.eq("seller_name", sellerName);
+
+    let prevOrdersQ = supabase
+      .from("orders")
+      .select("value, kanban_status, payment_type, created_at")
+      .neq("customer_email", "cliente@example.com")
+      .not("customer_name", "ilike", "%cliente fict%")
+      .gte("created_at", prevFromISO)
+      .lte("created_at", prevToISO);
+    if (sellerName) prevOrdersQ = prevOrdersQ.eq("seller_name", sellerName);
+
     const [ordersRes, prevOrdersRes, metaCurr, metaPrev, leadsCurr, leadsPrev] =
       await Promise.all([
-        supabase
-          .from("orders")
-          .select("value, kanban_status, payment_type, created_at")
-          .neq("customer_email", "cliente@example.com")
-          .not("customer_name", "ilike", "%cliente fict%")
-          .gte("created_at", fromISO)
-          .lte("created_at", toISO),
-        supabase
-          .from("orders")
-          .select("value, kanban_status, payment_type, created_at")
-          .neq("customer_email", "cliente@example.com")
-          .not("customer_name", "ilike", "%cliente fict%")
-          .gte("created_at", prevFromISO)
-          .lte("created_at", prevToISO),
+        ordersQ,
+        prevOrdersQ,
         fetchMetaAdsInsights(from, to).catch((e: Error) => ({
           spend: 0,
           daily: [],

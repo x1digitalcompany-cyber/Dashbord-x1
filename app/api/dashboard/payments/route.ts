@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { parseSellerParam } from "@/lib/seller-filter";
 import type { PaymentRow, PaymentStatus, PagamentosExpanded } from "@/types";
 
 const ALL_KANBAN = ["pedidos_criados", "em_transito", "retirar_correios", "pagos", "devolvidos", "inadimplentes"];
@@ -16,12 +17,13 @@ export async function GET(req: NextRequest) {
   const from = new Date(searchParams.get("from") ?? Date.now() - 30 * 86400000);
   const to = new Date(searchParams.get("to") ?? Date.now());
   const expanded = searchParams.get("expanded") === "1";
+  const sellerName = parseSellerParam(searchParams);
 
   try {
-    const { data: orders, error } = await supabase
+    let query = supabase
       .from("orders")
       .select(
-        "id, order_number, customer_name, value, gateway, kanban_status, created_at"
+        "id, order_number, customer_name, value, gateway, kanban_status, created_at, seller_name"
       )
       .in("kanban_status", ALL_KANBAN)
       .neq("customer_email", "cliente@example.com")
@@ -29,6 +31,9 @@ export async function GET(req: NextRequest) {
       .gte("created_at", from.toISOString())
       .lte("created_at", to.toISOString())
       .order("created_at", { ascending: false });
+    if (sellerName) query = query.eq("seller_name", sellerName);
+
+    const { data: orders, error } = await query;
 
     if (error) throw error;
 

@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { AGENDADO_PAYMENT_TYPES } from "@/lib/five-webhook";
 import { isKanbanColumn } from "@/lib/kanban-utils";
+import { parseSellerParam } from "@/lib/seller-filter";
 import type { KanbanColumn, KanbanColumns, KanbanOrder } from "@/types";
 
 function resolveTipo(raw: string | null): "antecipado" | "agendado" {
@@ -12,8 +13,7 @@ function resolveTipo(raw: string | null): "antecipado" | "agendado" {
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const tipo = resolveTipo(searchParams.get("tipo"));
-  const sellerIds =
-    searchParams.get("sellerIds")?.split(",").filter(Boolean) ?? [];
+  const sellerName = parseSellerParam(searchParams);
 
   try {
     let query = supabase
@@ -32,6 +32,10 @@ export async function GET(req: NextRequest) {
       .order("updated_at", { ascending: false })
       .limit(500);
 
+    if (sellerName) {
+      query = query.eq("seller_name", sellerName);
+    }
+
     if (tipo === "antecipado") {
       query = query.or(
         "payment_type.eq.antecipado,payment_type.is.null"
@@ -43,23 +47,7 @@ export async function GET(req: NextRequest) {
     const { data: orders, error } = await query;
     if (error) throw error;
 
-    let rows = orders ?? [];
-
-    if (sellerIds.length > 0) {
-      const { data: sellers } = await supabase
-        .from("sellers")
-        .select("id, name")
-        .in("id", sellerIds);
-
-      const idSet = new Set(sellerIds);
-      const nameSet = new Set((sellers ?? []).map((s) => s.name));
-
-      rows = rows.filter(
-        (o) =>
-          (o.seller_id && idSet.has(o.seller_id)) ||
-          (o.seller_name && nameSet.has(o.seller_name))
-      );
-    }
+    const rows = orders ?? [];
 
     const columns: KanbanColumns = {
       pedidos_criados: [],

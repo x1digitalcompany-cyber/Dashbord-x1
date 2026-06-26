@@ -38,14 +38,27 @@ const LS_KEY = "dashboard-x1-filters";
 
 function saveFilters(f: GlobalFilters) {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify({ period: f.period, sellerIds: f.sellerIds }));
+    localStorage.setItem(
+      LS_KEY,
+      JSON.stringify({ period: f.period, sellerName: f.sellerName })
+    );
   } catch (_) {}
 }
 
-export function loadSavedFilters(): Partial<Pick<GlobalFilters, "period" | "sellerIds">> {
+export function loadSavedFilters(): Partial<Pick<GlobalFilters, "period" | "sellerName">> {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw) as {
+        period?: PeriodOption;
+        sellerName?: string | null;
+        sellerIds?: string[];
+      };
+      return {
+        period: parsed.period,
+        sellerName: parsed.sellerName ?? null,
+      };
+    }
   } catch (_) {}
   return {};
 }
@@ -54,10 +67,9 @@ export function FilterBar({ filters, onChange, onRefresh, isRefreshing }: Filter
   const [sellerOpen, setSellerOpen] = useState(false);
   const [sellersList, setSellersList] = useState<SellerItem[]>([]);
 
-  // Busca lista de sellers uma vez
   useEffect(() => {
     fetch("/api/dashboard/sellers-list")
-      .then((r) => r.ok ? r.json() : [])
+      .then((r) => (r.ok ? r.json() : []))
       .then((data: SellerItem[]) => setSellersList(data))
       .catch(() => {});
   }, []);
@@ -69,38 +81,22 @@ export function FilterBar({ filters, onChange, onRefresh, isRefreshing }: Filter
     onChange(next);
   };
 
-  const toggleSeller = (id: string) => {
-    const already = filters.sellerIds.includes(id);
-    const next = {
-      ...filters,
-      sellerIds: already
-        ? filters.sellerIds.filter((s) => s !== id)
-        : [...filters.sellerIds, id],
-    };
+  const selectSeller = (name: string | null) => {
+    const next = { ...filters, sellerName: name };
     saveFilters(next);
     onChange(next);
+    setSellerOpen(false);
   };
 
-  const clearSellers = () => {
-    const next = { ...filters, sellerIds: [] };
-    saveFilters(next);
-    onChange(next);
-  };
-
-  const selectedLabels =
-    filters.sellerIds.length === 0
-      ? "Todos os vendedores"
-      : filters.sellerIds.length === 1
-      ? sellersList.find((s) => s.id === filters.sellerIds[0])?.name ?? "1 vendedor"
-      : `${filters.sellerIds.length} vendedores`;
+  const selectedLabel = filters.sellerName ?? "Todos os vendedores";
 
   return (
     <div className="flex items-center gap-3 flex-wrap">
-      {/* Period selector */}
       <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1 gap-1">
         {PERIOD_OPTIONS.map((opt) => (
           <button
             key={opt.value}
+            type="button"
             onClick={() => setPeriod(opt.value)}
             className={cn(
               "px-3 py-1.5 text-sm rounded-lg font-medium transition-all",
@@ -114,27 +110,33 @@ export function FilterBar({ filters, onChange, onRefresh, isRefreshing }: Filter
         ))}
       </div>
 
-      {/* Seller selector */}
       <div className="relative">
         <button
+          type="button"
           onClick={() => setSellerOpen(!sellerOpen)}
-          className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:border-gray-300 transition-colors"
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 bg-white border rounded-xl text-sm font-medium transition-colors",
+            filters.sellerName
+              ? "border-indigo-300 text-indigo-700 bg-indigo-50/50"
+              : "border-gray-200 text-gray-700 hover:border-gray-300"
+          )}
         >
-          <Users size={14} className="text-gray-400" />
-          <span>{selectedLabels}</span>
+          <Users size={14} className={filters.sellerName ? "text-indigo-500" : "text-gray-400"} />
+          <span className="max-w-[180px] truncate">{selectedLabel}</span>
           <ChevronDown
             size={14}
-            className={cn("text-gray-400 transition-transform", sellerOpen && "rotate-180")}
+            className={cn("text-gray-400 transition-transform shrink-0", sellerOpen && "rotate-180")}
           />
         </button>
 
         {sellerOpen && (
-          <div className="absolute top-full mt-1 left-0 z-20 bg-white border border-gray-100 rounded-xl shadow-lg py-1 min-w-48">
+          <div className="absolute top-full mt-1 left-0 z-20 bg-white border border-gray-100 rounded-xl shadow-lg py-1 min-w-52 max-h-64 overflow-y-auto">
             <button
-              onClick={clearSellers}
+              type="button"
+              onClick={() => selectSeller(null)}
               className={cn(
                 "w-full px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors",
-                filters.sellerIds.length === 0 ? "text-indigo-600 font-medium" : "text-gray-600"
+                !filters.sellerName ? "text-indigo-600 font-medium" : "text-gray-600"
               )}
             >
               Todos os vendedores
@@ -143,29 +145,21 @@ export function FilterBar({ filters, onChange, onRefresh, isRefreshing }: Filter
             {sellersList.map((seller) => (
               <button
                 key={seller.id}
-                onClick={() => toggleSeller(seller.id)}
+                type="button"
+                onClick={() => selectSeller(seller.name)}
                 className={cn(
-                  "w-full px-3 py-2 text-sm text-left flex items-center gap-2 hover:bg-gray-50 transition-colors",
-                  filters.sellerIds.includes(seller.id) ? "text-indigo-600 font-medium" : "text-gray-600"
+                  "w-full px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors",
+                  filters.sellerName === seller.name
+                    ? "text-indigo-600 font-medium bg-indigo-50/40"
+                    : "text-gray-600"
                 )}
               >
-                <span
-                  className={cn(
-                    "w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0",
-                    filters.sellerIds.includes(seller.id)
-                      ? "bg-indigo-600 border-indigo-600"
-                      : "border-gray-300"
-                  )}
-                >
-                  {filters.sellerIds.includes(seller.id) && (
-                    <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10" fill="currentColor">
-                      <path d="M8.5 2.5L4 7.5L1.5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                    </svg>
-                  )}
-                </span>
                 {seller.name}
               </button>
             ))}
+            {sellersList.length === 0 && (
+              <p className="px-3 py-2 text-xs text-gray-400">Nenhum vendedor nos pedidos</p>
+            )}
           </div>
         )}
       </div>
@@ -174,8 +168,8 @@ export function FilterBar({ filters, onChange, onRefresh, isRefreshing }: Filter
         <div className="fixed inset-0 z-10" onClick={() => setSellerOpen(false)} />
       )}
 
-      {/* Refresh */}
       <button
+        type="button"
         onClick={onRefresh}
         disabled={isRefreshing}
         className="ml-auto flex items-center gap-1.5 px-3 py-2 text-sm text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition-colors"

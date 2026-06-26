@@ -10,7 +10,8 @@ export interface DateRange {
 export interface GlobalFilters {
   period: PeriodOption;
   dateRange: DateRange;
-  sellerIds: string[]; // empty = todos
+  /** Nome do vendedor (seller_name em orders). null = todos. */
+  sellerName: string | null;
 }
 
 // ─── KPIs ─────────────────────────────────────────────────────────────────────

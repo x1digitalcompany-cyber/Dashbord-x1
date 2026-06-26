@@ -1,51 +1,67 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { pctChange, prevPeriod, round2, safeDivide } from "@/lib/finance";
+import { parseSellerParam } from "@/lib/seller-filter";
 import type { AgendamentosExpanded } from "@/types";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const from = new Date(searchParams.get("from") ?? Date.now() - 30 * 86400000);
   const to = new Date(searchParams.get("to") ?? Date.now());
-  const sellerIds = searchParams.get("sellerIds")?.split(",").filter(Boolean) ?? [];
+  const sellerName = parseSellerParam(searchParams);
   const prev = prevPeriod(from, to);
 
   const fromISO = from.toISOString();
   const toISO = to.toISOString();
 
   try {
-    let apptQuery = supabase
-      .from("appointments")
-      .select("id, payment_type, status, created_at, seller_id")
-      .gte("created_at", fromISO)
-      .lte("created_at", toISO);
+    let appointments: Array<{
+      id: string;
+      payment_type: string;
+      status: string;
+      created_at: string;
+      seller_id: string | null;
+      seller_name?: string | null;
+    }> = [];
 
-    if (sellerIds.length) apptQuery = apptQuery.in("seller_id", sellerIds);
+    if (!sellerName) {
+      const apptRes = await supabase
+        .from("appointments")
+        .select("id, payment_type, status, created_at, seller_id")
+        .gte("created_at", fromISO)
+        .lte("created_at", toISO);
 
-    const [apptRes, sellersRes] = await Promise.all([
-      apptQuery,
-      supabase.from("sellers").select("id, name").eq("is_active", true),
-    ]);
+      appointments = apptRes.data ?? [];
+    }
 
-    let appointments = apptRes.data ?? [];
-
-    if (apptRes.error || !appointments.length) {
-      let ordQuery = supabase
+    if (sellerName || !appointments.length) {
+      let ordersQ = supabase
         .from("orders")
-        .select("id, payment_type, kanban_status, created_at, seller_id, customer_name")
-        .in("payment_type", ["payafter", "agendado"])
+        .select(
+          "id, payment_type, kanban_status, created_at, seller_id, seller_name, customer_name"
+        )
         .neq("customer_email", "cliente@example.com")
         .not("customer_name", "ilike", "%cliente fict%")
         .gte("created_at", fromISO)
         .lte("created_at", toISO);
-      if (sellerIds.length) ordQuery = ordQuery.in("seller_id", sellerIds);
-      const { data: orders } = await ordQuery;
-      appointments = (orders ?? []).map((o) => ({
+      if (sellerName) ordersQ = ordersQ.eq("seller_name", sellerName);
+
+      const { data: orders } = await ordersQ;
+
+      appointments = (orders ?? []).map((o: {
+        id: string;
+        payment_type: string | null;
+        kanban_status: string;
+        created_at: string;
+        seller_id: string | null;
+        seller_name: string | null;
+      }) => ({
         id: o.id,
         payment_type: o.payment_type ?? "payafter",
         status: o.kanban_status === "pagos" ? "compareceu" : "agendado",
         created_at: o.created_at,
         seller_id: o.seller_id,
+        seller_name: o.seller_name,
       }));
     }
 
@@ -65,35 +81,49 @@ export async function GET(req: NextRequest) {
       .map(([date, count]) => ({ date, count }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    const sellers = sellersRes.data ?? [];
-    const sellerMap = Object.fromEntries(sellers.map((s) => [s.id, s.name]));
     const bySellerMap = new Map<string, number>();
     for (const a of appointments) {
-      const sid = a.seller_id ?? "sem-vendedor";
-      bySellerMap.set(sid, (bySellerMap.get(sid) ?? 0) + 1);
+      const key = a.seller_name ?? a.seller_id ?? "sem-vendedor";
+      bySellerMap.set(key, (bySellerMap.get(key) ?? 0) + 1);
     }
     const bySeller = Array.from(bySellerMap.entries())
-      .map(([sellerId, agendamentos]) => ({
-        sellerId,
-        sellerName: sellerMap[sellerId] ?? "Sem vendedor",
+      .map(([key, agendamentos]) => ({
+        sellerId: key,
+        sellerName: key === "sem-vendedor" ? "Sem vendedor" : key,
         agendamentos,
       }))
       .sort((a, b) => b.agendamentos - a.agendamentos);
 
     const prevFromISO = prev.from.toISOString();
     const prevToISO = prev.to.toISOString();
-    const { count: prevTotal } = await supabase
-      .from("appointments")
-      .select("id", { count: "exact", head: true })
-      .gte("created_at", prevFromISO)
-      .lte("created_at", prevToISO);
+
+    let prevTotal = 0;
+    if (sellerName) {
+      let prevQ = supabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .neq("customer_email", "cliente@example.com")
+        .not("customer_name", "ilike", "%cliente fict%")
+        .gte("created_at", prevFromISO)
+        .lte("created_at", prevToISO)
+        .eq("seller_name", sellerName);
+      const { count } = await prevQ;
+      prevTotal = count ?? 0;
+    } else {
+      const { count } = await supabase
+        .from("appointments")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", prevFromISO)
+        .lte("created_at", prevToISO);
+      prevTotal = count ?? 0;
+    }
 
     const result: AgendamentosExpanded = {
       total,
       antecipado,
       payafter: agendadoCount,
       taxaComparecimento: round2(safeDivide(compareceu, total) * 100),
-      variationPct: pctChange(total, prevTotal ?? 0),
+      variationPct: pctChange(total, prevTotal),
       daily,
       bySeller,
     };

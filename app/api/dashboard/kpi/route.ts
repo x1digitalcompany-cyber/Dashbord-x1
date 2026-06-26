@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { parseSellerParam } from "@/lib/seller-filter";
 import type { KpiData } from "@/types";
 
 const USD_BRL = Number(process.env.USD_BRL_FALLBACK_RATE ?? "5.4");
@@ -42,12 +43,53 @@ export async function GET(req: NextRequest) {
   const from = new Date(searchParams.get("from") ?? Date.now() - 30 * 86400000);
   const to   = new Date(searchParams.get("to")   ?? Date.now());
   const prev = prevPeriod(from, to);
+  const sellerName = parseSellerParam(searchParams);
 
   try {
     const fromISO     = from.toISOString();
     const toISO       = to.toISOString();
     const prevFromISO = prev.from.toISOString();
     const prevToISO   = prev.to.toISOString();
+
+    let agendQ = supabase.from("orders").select("id", { count: "exact", head: true })
+      .neq("customer_email", "cliente@example.com")
+      .not("customer_name", "ilike", "%cliente fict%")
+      .gte("created_at", fromISO).lte("created_at", toISO);
+    if (sellerName) agendQ = agendQ.eq("seller_name", sellerName);
+
+    let agendPrevQ = supabase.from("orders").select("id", { count: "exact", head: true })
+      .neq("customer_email", "cliente@example.com")
+      .not("customer_name", "ilike", "%cliente fict%")
+      .gte("created_at", prevFromISO).lte("created_at", prevToISO);
+    if (sellerName) agendPrevQ = agendPrevQ.eq("seller_name", sellerName);
+
+    let pagarmeQ = supabase.from("orders").select("value")
+      .eq("gateway", "pagarme").eq("kanban_status", "pagos")
+      .neq("customer_email", "cliente@example.com")
+      .not("customer_name", "ilike", "%cliente fict%")
+      .gte("created_at", fromISO).lte("created_at", toISO);
+    if (sellerName) pagarmeQ = pagarmeQ.eq("seller_name", sellerName);
+
+    let pagarmePrevQ = supabase.from("orders").select("value")
+      .eq("gateway", "pagarme").eq("kanban_status", "pagos")
+      .neq("customer_email", "cliente@example.com")
+      .not("customer_name", "ilike", "%cliente fict%")
+      .gte("created_at", prevFromISO).lte("created_at", prevToISO);
+    if (sellerName) pagarmePrevQ = pagarmePrevQ.eq("seller_name", sellerName);
+
+    let paytQ = supabase.from("orders").select("value")
+      .eq("gateway", "payt").eq("kanban_status", "pagos")
+      .neq("customer_email", "cliente@example.com")
+      .not("customer_name", "ilike", "%cliente fict%")
+      .gte("created_at", fromISO).lte("created_at", toISO);
+    if (sellerName) paytQ = paytQ.eq("seller_name", sellerName);
+
+    let paytPrevQ = supabase.from("orders").select("value")
+      .eq("gateway", "payt").eq("kanban_status", "pagos")
+      .neq("customer_email", "cliente@example.com")
+      .not("customer_name", "ilike", "%cliente fict%")
+      .gte("created_at", prevFromISO).lte("created_at", prevToISO);
+    if (sellerName) paytPrevQ = paytPrevQ.eq("seller_name", sellerName);
 
     const [
       agendRes, agendPrevRes,
@@ -57,40 +99,12 @@ export async function GET(req: NextRequest) {
       adAccountsRes,
       adSpendRes, adSpendPrevRes,
     ] = await Promise.all([
-      // Agendamentos — todos os pedidos do período
-      supabase.from("orders").select("id", { count: "exact", head: true })
-        .neq("customer_email", "cliente@example.com")
-        .not("customer_name", "ilike", "%cliente fict%")
-        .gte("created_at", fromISO).lte("created_at", toISO),
-      supabase.from("orders").select("id", { count: "exact", head: true })
-        .neq("customer_email", "cliente@example.com")
-        .not("customer_name", "ilike", "%cliente fict%")
-        .gte("created_at", prevFromISO).lte("created_at", prevToISO),
-
-      // Pagar.me — pedidos pagos no gateway pagarme
-      supabase.from("orders").select("value")
-        .eq("gateway", "pagarme").eq("kanban_status", "pagos")
-        .neq("customer_email", "cliente@example.com")
-        .not("customer_name", "ilike", "%cliente fict%")
-        .gte("created_at", fromISO).lte("created_at", toISO),
-      supabase.from("orders").select("value")
-        .eq("gateway", "pagarme").eq("kanban_status", "pagos")
-        .neq("customer_email", "cliente@example.com")
-        .not("customer_name", "ilike", "%cliente fict%")
-        .gte("created_at", prevFromISO).lte("created_at", prevToISO),
-
-      // Payt — pedidos pagos no gateway payt
-      supabase.from("orders").select("value")
-        .eq("gateway", "payt").eq("kanban_status", "pagos")
-        .neq("customer_email", "cliente@example.com")
-        .not("customer_name", "ilike", "%cliente fict%")
-        .gte("created_at", fromISO).lte("created_at", toISO),
-      supabase.from("orders").select("value")
-        .eq("gateway", "payt").eq("kanban_status", "pagos")
-        .neq("customer_email", "cliente@example.com")
-        .not("customer_name", "ilike", "%cliente fict%")
-        .gte("created_at", prevFromISO).lte("created_at", prevToISO),
-
+      agendQ,
+      agendPrevQ,
+      pagarmeQ,
+      pagarmePrevQ,
+      paytQ,
+      paytPrevQ,
       // Leads
       supabase.from("leads").select("id", { count: "exact", head: true })
         .gte("created_at", fromISO).lte("created_at", toISO),

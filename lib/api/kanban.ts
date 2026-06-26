@@ -2,21 +2,21 @@ import type { KanbanColumn, KanbanColumns, KanbanOperationType } from "@/types";
 
 export function buildKanbanUrl(
   tipo: KanbanOperationType,
-  sellerIds: string[] = []
+  sellerName: string | null = null
 ): string {
   const params = new URLSearchParams({ tipo });
-  if (sellerIds.length > 0) {
-    params.set("sellerIds", sellerIds.join(","));
+  if (sellerName) {
+    params.set("seller", sellerName);
   }
   return `/api/dashboard/kanban?${params}`;
 }
 
 export async function fetchKanbanBoard(
   tipo: KanbanOperationType,
-  sellerIds: string[] = [],
+  sellerName: string | null = null,
   signal?: AbortSignal
 ): Promise<{ columns: KanbanColumns; metrics: import("@/types").KanbanMetrics }> {
-  const res = await fetch(buildKanbanUrl(tipo, sellerIds), { signal });
+  const res = await fetch(buildKanbanUrl(tipo, sellerName), { signal });
   if (!res.ok) throw new Error("Falha ao buscar pedidos do Kanban");
   return res.json();
 }

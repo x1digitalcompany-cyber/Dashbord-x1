@@ -22,13 +22,13 @@ export async function fetchAgendamentosMetrics(
 export async function fetchAgendamentosBySeller(
   from: Date,
   to: Date,
-  sellerIds?: string[]
+  sellerName?: string | null
 ): Promise<SellerAgendamento[]> {
   const params = new URLSearchParams({
     from: from.toISOString(),
     to: to.toISOString(),
-    ...(sellerIds?.length ? { sellerIds: sellerIds.join(",") } : {}),
   });
+  if (sellerName) params.set("seller", sellerName);
   const res = await fetch(`/api/dashboard/sellers?${params}`);
   if (!res.ok) throw new Error("Falha ao buscar agendamentos por vendedor");
   return res.json();

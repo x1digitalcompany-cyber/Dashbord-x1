@@ -1,21 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { round2, safeDivide, SALE_STATUS } from "@/lib/finance";
+import { parseSellerParam } from "@/lib/seller-filter";
 import type { EstadoMetric } from "@/types";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const from = new Date(searchParams.get("from") ?? Date.now() - 30 * 86400000);
   const to = new Date(searchParams.get("to") ?? Date.now());
+  const sellerName = parseSellerParam(searchParams);
 
   try {
-    const { data: orders, error } = await supabase
+    let query = supabase
       .from("orders")
       .select("estado, state, value, kanban_status")
       .neq("customer_email", "cliente@example.com")
       .not("customer_name", "ilike", "%cliente fict%")
       .gte("created_at", from.toISOString())
       .lte("created_at", to.toISOString());
+    if (sellerName) query = query.eq("seller_name", sellerName);
+
+    const { data: orders, error } = await query;
 
     if (error) throw error;
 

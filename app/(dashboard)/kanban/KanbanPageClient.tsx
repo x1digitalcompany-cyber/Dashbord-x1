@@ -38,7 +38,7 @@ const KANBAN_REFRESH_MS = 30_000;
 
 function useKanbanTipo(
   tipo: KanbanOperationType,
-  sellerIds: string[]
+  sellerName: string | null
 ) {
   const [data, setData] = useState<KanbanColumns | null>(null);
   const [metrics, setMetrics] = useState<KanbanMetrics>(EMPTY_METRICS);
@@ -49,7 +49,7 @@ function useKanbanTipo(
     setLoading(true);
     setError(undefined);
     try {
-      const json = await fetchKanbanBoard(tipo, sellerIds, signal);
+      const json = await fetchKanbanBoard(tipo, sellerName, signal);
       setData(json.columns ?? EMPTY_COLUMNS);
       setMetrics(json.metrics ?? EMPTY_METRICS);
     } catch (e) {
@@ -58,7 +58,7 @@ function useKanbanTipo(
     } finally {
       setLoading(false);
     }
-  }, [tipo, sellerIds.join(",")]);
+  }, [tipo, sellerName]);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -67,9 +67,7 @@ function useKanbanTipo(
   }, [load]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      load();
-    }, KANBAN_REFRESH_MS);
+    const interval = setInterval(() => load(), KANBAN_REFRESH_MS);
     return () => clearInterval(interval);
   }, [load]);
 
@@ -80,27 +78,32 @@ export default function KanbanPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { filters } = useDashboardFilters();
-  const sellerIds = filters.sellerIds;
+  const sellerName = filters.sellerName;
 
-  const tipoParam = searchParams.get("tipo");
-  const activeTab: KanbanOperationType =
-    tipoParam === "agendado" ? "agendado" : "antecipado";
+  const tipoFromUrl: KanbanOperationType =
+    searchParams.get("tipo") === "agendado" ? "agendado" : "antecipado";
 
+  const [activeTab, setActiveTab] = useState<KanbanOperationType>(tipoFromUrl);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    if (!tipoParam) {
+    setActiveTab(tipoFromUrl);
+  }, [tipoFromUrl]);
+
+  useEffect(() => {
+    if (!searchParams.get("tipo")) {
       router.replace("/kanban?tipo=antecipado", { scroll: false });
     }
-  }, [tipoParam, router]);
+  }, [searchParams, router]);
 
-  const antecipado = useKanbanTipo("antecipado", sellerIds);
-  const agendado = useKanbanTipo("agendado", sellerIds);
+  const antecipado = useKanbanTipo("antecipado", sellerName);
+  const agendado = useKanbanTipo("agendado", sellerName);
 
   const active = activeTab === "antecipado" ? antecipado : agendado;
 
   const setTab = (tab: KanbanOperationType) => {
     setSearch("");
+    setActiveTab(tab);
     router.replace(`/kanban?tipo=${tab}`, { scroll: false });
   };
 
@@ -165,27 +168,16 @@ export default function KanbanPage() {
         </div>
       )}
 
-      {activeTab === "antecipado" ? (
-        <KanbanFive
-          title="Kanban Five — Antecipado"
-          data={antecipado.data}
-          loading={antecipado.loading}
-          error={antecipado.error}
-          search={search}
-          onSearchChange={setSearch}
-          onMove={handleMove}
-        />
-      ) : (
-        <KanbanFive
-          title="Kanban Five — Agendado"
-          data={agendado.data}
-          loading={agendado.loading}
-          error={agendado.error}
-          search={search}
-          onSearchChange={setSearch}
-          onMove={handleMove}
-        />
-      )}
+      <KanbanFive
+        key={activeTab}
+        title={activeTab === "antecipado" ? "Kanban Five — Antecipado" : "Kanban Five — Agendado"}
+        data={active.data}
+        loading={active.loading}
+        error={active.error}
+        search={search}
+        onSearchChange={setSearch}
+        onMove={handleMove}
+      />
     </div>
   );
 }

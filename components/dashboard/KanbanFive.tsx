@@ -330,7 +330,7 @@ export function KanbanFive({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
 
   useEffect(() => {
-    if (data !== null) setColumns(data);
+    setColumns(data);
   }, [data]);
 
   const displayColumns = useMemo(

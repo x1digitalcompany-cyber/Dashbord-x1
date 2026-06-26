@@ -33,7 +33,7 @@ function buildInitialFilters(): GlobalFilters {
   return {
     period,
     dateRange: getDateRangeForPeriod(period),
-    sellerIds: saved.sellerIds ?? [],
+    sellerName: saved.sellerName ?? null,
   };
 }
 
@@ -83,13 +83,14 @@ export function useDashboardFilters() {
 }
 
 export function buildApiParams(filters: GlobalFilters) {
-  return new URLSearchParams({
+  const params = new URLSearchParams({
     from: filters.dateRange.from.toISOString(),
     to: filters.dateRange.to.toISOString(),
-    ...(filters.sellerIds.length > 0
-      ? { sellerIds: filters.sellerIds.join(",") }
-      : {}),
   });
+  if (filters.sellerName) {
+    params.set("seller", filters.sellerName);
+  }
+  return params;
 }
 
 export function useFetchOnFilters<T>(
