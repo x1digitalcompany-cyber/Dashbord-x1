@@ -101,6 +101,7 @@ export interface MetaAdsData {
   mock?: boolean;
   configured?: boolean;
   error?: string;
+  accountErrors?: string[];
   source?: "meta_api" | "cache" | "mock";
 }
 
@@ -213,8 +214,7 @@ export async function resolveAccounts(): Promise<MetaAccountConfig[]> {
   const { data } = await supabase
     .from("ad_accounts")
     .select("account_id, access_token, currency")
-    .eq("is_active", true)
-    .limit(1);
+    .eq("is_active", true);
 
   if (!data?.length) return [];
 
@@ -456,69 +456,77 @@ async function buildFromAccounts(since: string, until: string): Promise<MetaAdsD
   const dailyMap = new Map<string, MetaDailyRow>();
   const statusMaps: Map<string, string>[] = [];
 
+  const accountErrors: string[] = [];
+
   for (const account of accounts) {
-    const [campaignRows, dailyRows, accountRows, statuses] = await Promise.all([
-      fetchInsightsRaw(account, since, until, "campaign"),
-      fetchInsightsRaw(account, since, until, "account", "1"),
-      fetchInsightsRaw(account, since, until, "account"),
-      fetchCampaignStatuses(account),
-    ]);
-    statusMaps.push(statuses);
+    try {
+      const [campaignRows, dailyRows, accountRows, statuses] = await Promise.all([
+        fetchInsightsRaw(account, since, until, "campaign"),
+        fetchInsightsRaw(account, since, until, "account", "1"),
+        fetchInsightsRaw(account, since, until, "account"),
+        fetchCampaignStatuses(account),
+      ]);
+      statusMaps.push(statuses);
 
-    if (accountRows.length === 1) {
-      const n = normalizeRow(accountRows[0], account.currency, usdRate);
-      totalSpend += n.spend;
-      totalImpressions += n.impressions;
-      totalClicks += n.clicks;
-      totalReach += n.reach;
-      totalLeads += n.leads;
-      totalPurchases += n.purchases;
-      totalPurchaseValue += n.purchaseValue;
-    }
-
-    for (const raw of campaignRows) {
-      const n = normalizeRow(raw, account.currency, usdRate);
-      const id = n.campaign_id ?? "unknown";
-      const cur = campaignMap.get(id);
-      if (cur) {
-        cur.spend += n.spend;
-        cur.impressions += n.impressions;
-        cur.clicks += n.clicks;
-        cur.leads += n.leads;
-        cur.cpl = cur.leads > 0 ? cur.spend / cur.leads : 0;
-      } else {
-        campaignMap.set(id, {
-          id,
-          name: n.campaign_name ?? "Sem nome",
-          status: statuses.get(id) ?? "UNKNOWN",
-          spend: n.spend,
-          impressions: n.impressions,
-          clicks: n.clicks,
-          leads: n.leads,
-          cpl: n.leads > 0 ? n.spend / n.leads : 0,
-        });
+      if (accountRows.length === 1) {
+        const n = normalizeRow(accountRows[0], account.currency, usdRate);
+        totalSpend += n.spend;
+        totalImpressions += n.impressions;
+        totalClicks += n.clicks;
+        totalReach += n.reach;
+        totalLeads += n.leads;
+        totalPurchases += n.purchases;
+        totalPurchaseValue += n.purchaseValue;
       }
-    }
 
-    for (const raw of dailyRows) {
-      const n = normalizeRow(raw, account.currency, usdRate);
-      const date = n.date ?? "";
-      if (!date) continue;
-      const cur = dailyMap.get(date);
-      if (cur) {
-        cur.spend += n.spend;
-        cur.impressions += n.impressions;
-        cur.clicks += n.clicks;
-        cur.leads += n.leads;
-      } else {
-        dailyMap.set(date, {
-          date,
-          spend: n.spend,
-          impressions: n.impressions,
-          clicks: n.clicks,
-          leads: n.leads,
-        });
+      for (const raw of campaignRows) {
+        const n = normalizeRow(raw, account.currency, usdRate);
+        const id = n.campaign_id ?? "unknown";
+        const cur = campaignMap.get(id);
+        if (cur) {
+          cur.spend += n.spend;
+          cur.impressions += n.impressions;
+          cur.clicks += n.clicks;
+          cur.leads += n.leads;
+          cur.cpl = cur.leads > 0 ? cur.spend / cur.leads : 0;
+        } else {
+          campaignMap.set(id, {
+            id,
+            name: n.campaign_name ?? "Sem nome",
+            status: statuses.get(id) ?? "UNKNOWN",
+            spend: n.spend,
+            impressions: n.impressions,
+            clicks: n.clicks,
+            leads: n.leads,
+            cpl: n.leads > 0 ? n.spend / n.leads : 0,
+          });
+        }
       }
+
+      for (const raw of dailyRows) {
+        const n = normalizeRow(raw, account.currency, usdRate);
+        const date = n.date ?? "";
+        if (!date) continue;
+        const cur = dailyMap.get(date);
+        if (cur) {
+          cur.spend += n.spend;
+          cur.impressions += n.impressions;
+          cur.clicks += n.clicks;
+          cur.leads += n.leads;
+        } else {
+          dailyMap.set(date, {
+            date,
+            spend: n.spend,
+            impressions: n.impressions,
+            clicks: n.clicks,
+            leads: n.leads,
+          });
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      accountErrors.push(`act_${account.accountId}: ${msg}`);
+      console.error(`[meta-ads] conta act_${account.accountId} falhou:`, msg);
     }
   }
 
@@ -555,6 +563,7 @@ async function buildFromAccounts(since: string, until: string): Promise<MetaAdsD
     date_stop: until,
     fetched_at: new Date().toISOString(),
     source: "meta_api",
+    ...(accountErrors.length > 0 ? { accountErrors } : {}),
   };
 }
 

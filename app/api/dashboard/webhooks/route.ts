@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/require-session";
 import { supabase } from "@/lib/supabase";
 import { processFiveWebhookPost } from "@/lib/five-webhook-process";
 import type { FiveWebhookSource } from "@/lib/five-webhook-process";
+import { getWebhookSecret } from "@/lib/webhook-config";
 
 const TEST_PAYLOAD = {
   orderId: "TEST-WEBHOOK-DASHBOARD",
@@ -37,8 +38,9 @@ export async function GET(req: NextRequest) {
   }
 
   const base = process.env.NEXTAUTH_URL ?? req.nextUrl.origin;
-  const antecipadoSecret = process.env.FIVE_WEBHOOK_SECRET_ANTECIPADO?.trim() ?? "";
-  const agendadoSecret = process.env.FIVE_WEBHOOK_SECRET_AGENDADO?.trim() ?? "";
+  const secret = await getWebhookSecret();
+  const antecipadoSecret = secret ?? process.env.FIVE_WEBHOOK_SECRET_ANTECIPADO?.trim() ?? "";
+  const agendadoSecret = secret ?? process.env.FIVE_WEBHOOK_SECRET_AGENDADO?.trim() ?? "";
 
   const [antecipadoLog, agendadoLog] = await Promise.all([
     lastLog("antecipado"),
@@ -84,11 +86,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "source inválido" }, { status: 400 });
   }
 
-  const secret = (
+  const secret = await getWebhookSecret();
+  const envSecret = (
     source === "antecipado"
       ? process.env.FIVE_WEBHOOK_SECRET_ANTECIPADO
       : process.env.FIVE_WEBHOOK_SECRET_AGENDADO
   )?.trim() ?? "";
+  const webhookSecret = secret ?? envSecret;
 
   const base = process.env.NEXTAUTH_URL ?? req.nextUrl.origin;
   const webhookPath =
@@ -96,7 +100,7 @@ export async function POST(req: NextRequest) {
       ? "/api/webhooks/five/antecipado"
       : "/api/webhooks/five/agendado";
   const webhookUrl = new URL(`${base}${webhookPath}`);
-  if (secret) webhookUrl.searchParams.set("secret", secret);
+  if (webhookSecret) webhookUrl.searchParams.set("secret", webhookSecret);
 
   const testReq = new NextRequest(webhookUrl.toString(), {
     method: "POST",

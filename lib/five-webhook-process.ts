@@ -61,6 +61,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { getWebhookSecret } from "@/lib/webhook-config";
 import {
   buildOrderRecord,
   validateFivePayload,
@@ -103,7 +104,10 @@ function getSecretFromRequest(req: NextRequest): string {
   return (req.nextUrl.searchParams.get("secret") ?? "").trim();
 }
 
-function expectedSecret(source: FiveWebhookSource): string | undefined {
+async function expectedSecret(source: FiveWebhookSource): Promise<string | undefined> {
+  const globalSecret = await getWebhookSecret();
+  if (globalSecret) return globalSecret;
+
   if (source === "antecipado") {
     return process.env.FIVE_WEBHOOK_SECRET_ANTECIPADO?.trim();
   }
@@ -183,7 +187,7 @@ export async function processFiveWebhookPost(
   source: FiveWebhookSource,
   options?: { skipSecret?: boolean }
 ): Promise<NextResponse> {
-  const secret = expectedSecret(source);
+  const secret = await expectedSecret(source);
   const envKey = `FIVE_WEBHOOK_SECRET_${source === "antecipado" ? "ANTECIPADO" : "AGENDADO"}`;
   const isProd = process.env.NODE_ENV === "production";
 

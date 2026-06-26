@@ -186,3 +186,54 @@ export async function testMetaAccount(
     metaName: info.name ?? undefined,
   };
 }
+
+/** Resolve nome + moeda de cada account_id em paralelo via Graph API. */
+export async function fetchAdAccountNames(
+  accountIds: string[],
+  accessToken: string,
+  apiVersion?: string
+): Promise<
+  Array<{
+    account_id: string;
+    name: string | null;
+    currency: "BRL" | "USD" | null;
+    error: string | null;
+  }>
+> {
+  const version = apiVersion ?? (await getMetaApiVersion());
+  return Promise.all(
+    accountIds.map(async (id) => {
+      const normalized = normalizeAccountId(id);
+      const url =
+        `https://graph.facebook.com/${version}/act_${normalized}` +
+        `?fields=name,currency&access_token=${accessToken}`;
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        const data = await res.json();
+        if (data.error) {
+          return {
+            account_id: normalized,
+            name: null,
+            currency: null,
+            error: String(data.error.message ?? "Erro Meta"),
+          };
+        }
+        const raw = String(data.currency ?? "").toUpperCase();
+        const currency = raw === "USD" ? "USD" : raw === "BRL" ? "BRL" : null;
+        return {
+          account_id: normalized,
+          name: data.name ? String(data.name) : null,
+          currency,
+          error: null,
+        };
+      } catch (err) {
+        return {
+          account_id: normalized,
+          name: null,
+          currency: null,
+          error: String(err),
+        };
+      }
+    })
+  );
+}

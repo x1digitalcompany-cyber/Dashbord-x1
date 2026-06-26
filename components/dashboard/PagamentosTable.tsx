@@ -32,6 +32,12 @@ const LABELS: Record<PaymentGateway, Record<PaymentStatus, string>> = {
     refunded: "Five — Devolvidos",
     chargeback: "Five — Inadimplentes",
   },
+  braip: {
+    approved: "Braip — Aprovados",
+    pending: "Braip — Pendentes",
+    refunded: "Braip — Estornos",
+    chargeback: "Braip — Chargeback",
+  },
 };
 
 const STATUS_BADGE: Record<PaymentStatus, "green" | "yellow" | "red" | "blue" | "rose"> = {

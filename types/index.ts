@@ -64,7 +64,7 @@ export interface SellerAgendamento {
 // ─── Payments ────────────────────────────────────────────────────────────────
 
 export type PaymentStatus = "approved" | "pending" | "refunded" | "chargeback";
-export type PaymentGateway = "pagarme" | "payt" | "five";
+export type PaymentGateway = "pagarme" | "payt" | "five" | "braip";
 
 export interface PaymentRow {
   gateway: PaymentGateway;
@@ -203,11 +203,23 @@ export interface AgendamentosExpanded {
   bySeller: SellerAgendamento[];
 }
 
+export interface PaymentSourceBreakdown {
+  aprovados: { count: number; valor: number };
+  pendentes: { count: number; valor: number };
+  reembolsos?: { count: number; valor: number };
+}
+
 export interface PagamentosExpanded {
   rows: PaymentRow[];
   totalVolume: number;
   totalCount: number;
   byGateway: { gateway: PaymentGateway; volume: number; count: number }[];
+  sources?: {
+    five: PaymentSourceBreakdown;
+    payt: PaymentSourceBreakdown;
+    braip: PaymentSourceBreakdown;
+    total: { valor: number; transacoes: number };
+  };
   recent: {
     id: string;
     orderNumber: string;

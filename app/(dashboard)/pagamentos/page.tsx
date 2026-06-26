@@ -19,9 +19,10 @@ const GATEWAY_LABEL: Record<PaymentGateway, string> = {
   pagarme: "Pagar.me",
   payt: "Payt",
   five: "Five (webhook)",
+  braip: "Braip",
 };
 
-const GATEWAY_COLORS = ["#6366f1", "#f59e0b", "#10b981"];
+const GATEWAY_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#8b5cf6"];
 
 const STATUS_LABEL = {
   approved: "Aprovado",
