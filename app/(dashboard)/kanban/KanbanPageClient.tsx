@@ -20,18 +20,22 @@ const TABS: { id: KanbanOperationType; label: string }[] = [
 ];
 
 const EMPTY_COLUMNS: KanbanColumns = {
-  pedidos_criados: [],
-  em_transito: [],
+  pedidos_criados:  [],
+  em_transito:      [],
   retirar_correios: [],
-  pagos: [],
-  devolvidos: [],
-  inadimplentes: [],
+  requer_atencao:   [],
+  entregue:         [],
+  pagos:            [],
+  devolvidos:       [],
+  inadimplentes:    [],
 };
 
 const EMPTY_METRICS: KanbanMetrics = {
-  total: 0,
-  paidValue: 0,
+  total:              0,
+  paidValue:          0,
   inadimplentesCount: 0,
+  emTransitoCount:    0,
+  requerAtencaoCount: 0,
 };
 
 const KANBAN_REFRESH_MS = 30_000;
@@ -157,19 +161,37 @@ export default function KanbanPage() {
       {!active.loading && !active.error && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <MetricCard label="Total de pedidos" value={formatNumber(displayMetrics.total)} />
-          <MetricCard
-            label="Valor dos pagos"
-            value={formatCurrency(displayMetrics.paidValue)}
-          />
-          <MetricCard
-            label="Inadimplentes"
-            value={formatNumber(displayMetrics.inadimplentesCount)}
-          />
+          {activeTab === "antecipado" ? (
+            <>
+              <MetricCard
+                label="Em Trânsito"
+                value={formatNumber(displayMetrics.emTransitoCount)}
+              />
+              <MetricCard
+                label="Requer Atenção"
+                value={formatNumber(displayMetrics.requerAtencaoCount)}
+                highlight={displayMetrics.requerAtencaoCount > 0}
+              />
+            </>
+          ) : (
+            <>
+              <MetricCard
+                label="Valor dos pagos"
+                value={formatCurrency(displayMetrics.paidValue)}
+              />
+              <MetricCard
+                label="Inadimplentes"
+                value={formatNumber(displayMetrics.inadimplentesCount)}
+                highlight={displayMetrics.inadimplentesCount > 0}
+              />
+            </>
+          )}
         </div>
       )}
 
       <KanbanFive
         key={activeTab}
+        tipo={activeTab}
         title={activeTab === "antecipado" ? "Kanban Five — Antecipado" : "Kanban Five — Agendado"}
         data={active.data}
         loading={active.loading}
@@ -182,11 +204,16 @@ export default function KanbanPage() {
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: string }) {
+function MetricCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm dark:border-gray-800 dark:bg-gray-950">
+    <div className={cn(
+      "rounded-xl border bg-white px-4 py-3 shadow-sm dark:bg-gray-950",
+      highlight
+        ? "border-orange-200 bg-orange-50/30 dark:border-orange-800"
+        : "border-gray-100 dark:border-gray-800"
+    )}>
       <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
-      <p className="mt-1 text-xl font-bold text-gray-900 dark:text-gray-100">{value}</p>
+      <p className={cn("mt-1 text-xl font-bold", highlight ? "text-orange-600" : "text-gray-900 dark:text-gray-100")}>{value}</p>
     </div>
   );
 }

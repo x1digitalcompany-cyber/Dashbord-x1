@@ -12,9 +12,10 @@ type FiveInternalColumn =
   | "Transito"
   | "Saiu para entrega"
   | "Retirar Correios"
+  | "Requer Atenção"    // DELIVERY_FAILED
   | "Entregue"
   | "Devolvido"
-  | "Cobrança"
+  | "Cobrança"          // DELIVERED + email não pago (agendado → aguarda pgto)
   | "Reenviado"
   | "Concluido";
 
@@ -162,10 +163,10 @@ export function decideFiveColumn(
 
   if (shippingStatus === "DELIVERY_FAILED") {
     return {
-      column: "Retirar Correios",
+      column: "Requer Atenção",
       label: "Falha na entrega",
       priority: true,
-      message: "Falha na entrega: acompanhar com prioridade.",
+      message: "Falha na entrega: requer atenção.",
     };
   }
 
@@ -234,30 +235,35 @@ function mapKanbanToInternal(kanban: KanbanColumn | null): FiveInternalColumn | 
     pedidos_criados:  "Pedido Criado",
     em_transito:      "Transito",
     retirar_correios: "Retirar Correios",
-    pagos:            "Entregue",
+    requer_atencao:   "Requer Atenção",
+    entregue:         "Entregue",
+    pagos:            "Concluido",
     devolvidos:       "Devolvido",
     inadimplentes:    "Cobrança",
   };
   return map[kanban] ?? null;
 }
 
-export function mapFiveColumnToKanban(column: FiveInternalColumn): KanbanColumn {
+export function mapFiveColumnToKanban(
+  column: FiveInternalColumn,
+  paymentType?: string
+): KanbanColumn {
   switch (column) {
     case "Transito":
-    case "Saiu para entrega":
-      return "em_transito";
-    case "Retirar Correios":
-      return "retirar_correios";
+    case "Saiu para entrega":   return "em_transito";
+    case "Retirar Correios":    return "retirar_correios";
+    case "Requer Atenção":      return "requer_atencao";
+    case "Cobrança":
+      // DELIVERED + email não pago → agendado aguarda pagamento
+      return "entregue";
     case "Entregue":
     case "Concluido":
     case "Reenviado":
-      return "pagos";
-    case "Devolvido":
-      return "devolvidos";
-    case "Cobrança":
-      return "inadimplentes";
-    default:           // "Pedido Criado"
-      return "pedidos_criados";
+      // agendado + paid email → pagos; antecipado → entregue
+      if (paymentType === "agendado" || paymentType === "payafter") return "pagos";
+      return "entregue";
+    case "Devolvido":           return "devolvidos";
+    default:                    return "pedidos_criados"; // "Pedido Criado"
   }
 }
 
@@ -312,21 +318,23 @@ export function buildOrderRecord(
 } {
   const orderNumber = extractOrderId(payload);
   const displayId = orderNumber.slice(-8).toUpperCase();
+  const paymentType = extractPaymentType(payload, forcedPaymentType);
   const decision = decideFiveColumn(payload, existing?.kanban_status ?? null);
 
   const lockedDevolvido =
     existing?.kanban_status === "devolvidos" && decision.column !== "Devolvido";
-  const lockedManual =
-    existing?.kanban_status === "pagos" &&
-    !["Entregue", "Concluido", "Reenviado"].includes(decision.column);
+  // Uma vez entregue/pago, não regredir — exceto para Devolvido ou Requer Atenção
+  const lockedFinal =
+    (existing?.kanban_status === "pagos" || existing?.kanban_status === "entregue") &&
+    !["Entregue", "Concluido", "Reenviado", "Devolvido", "Requer Atenção"].includes(decision.column);
 
-  const finalInternal: FiveInternalColumn = lockedManual
-    ? "Concluido"
+  const finalInternal: FiveInternalColumn = lockedFinal
+    ? (existing?.kanban_status === "pagos" ? "Concluido" : "Entregue")
     : lockedDevolvido
       ? "Devolvido"
       : decision.column;
 
-  const kanbanStatus = mapFiveColumnToKanban(finalInternal);
+  const kanbanStatus = mapFiveColumnToKanban(finalInternal, paymentType);
 
   const email =
     clean(get(payload, "customer.mail")) || clean(existing?.customer_email);
@@ -395,7 +403,7 @@ export function buildOrderRecord(
     estado,
     seller_name: sellerNameIncoming || existing?.seller_name || null,
     project_name: projectIncoming || existing?.project_name || null,
-    payment_type: extractPaymentType(payload, forcedPaymentType),
+    payment_type: paymentType,
     paid_at: paidAt,
   };
 }

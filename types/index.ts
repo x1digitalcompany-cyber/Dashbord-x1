@@ -73,9 +73,11 @@ export type KanbanColumn =
   | "pedidos_criados"
   | "em_transito"
   | "retirar_correios"
-  | "pagos"
+  | "requer_atencao"   // DELIVERY_FAILED ou movido manualmente
+  | "entregue"         // antecipado=final; agendado=aguardando pgto
+  | "pagos"            // agendado only: pagamento confirmado
   | "devolvidos"
-  | "inadimplentes";
+  | "inadimplentes";   // agendado only: pgto não recebido
 
 export interface KanbanOrder {
   id: string;
@@ -119,6 +121,8 @@ export interface KanbanMetrics {
   total: number;
   paidValue: number;
   inadimplentesCount: number;
+  emTransitoCount: number;
+  requerAtencaoCount: number;
 }
 
 export interface KanbanApiResponse {
@@ -206,4 +210,95 @@ export interface PagamentosExpanded {
     status: PaymentStatus;
     createdAt: string;
   }[];
+}
+
+// ─── PayAfter / Agendamentos ─────────────────────────────────────────────────
+
+export interface PayafterKpis {
+  agendamentos: number;
+  convertidos: number;
+  taxa_conversao: number;
+  enviados: number;
+  entregues: number;
+  taxa_entrega: number;
+  pagos: number;
+  taxa_pagamento: number;
+  em_risco_count: number;
+  em_risco_valor: number;
+  inadimplentes_count: number;
+  inadimplentes_valor: number;
+  devolvidos: number;
+  taxa_devolucao: number;
+  lucro_estimado: number;
+  margem: number;
+  variacao_agendamentos: number;
+  gasto_anuncio: number;
+  faturamento_pagos: number;
+}
+
+export interface PayafterAlert {
+  id: string;
+  severity: "red" | "yellow";
+  message: string;
+  target: "em-risco" | "inadimplentes";
+  filter?: string;
+  orderIds?: string[];
+}
+
+export interface PayafterFunnelStep {
+  id: string;
+  label: string;
+  count: number;
+  value: number;
+  conversionPct: number;
+  branch?: boolean;
+}
+
+export interface PayafterSellerExpanded {
+  sellerId: string;
+  sellerName: string;
+  agendamentos: number;
+  convertidos: number;
+  taxaConversao: number;
+  taxaInadimplencia: number;
+}
+
+export interface PayafterEmRiscoRow {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  customerPhone: string;
+  value: number;
+  updatedAt: string;
+  daysDelivered: number;
+  sellerName: string;
+  urgency: "low" | "medium" | "high";
+}
+
+export interface PayafterInadimplenteRow {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  customerCpf: string;
+  customerPhone: string;
+  value: number;
+  sellerName: string;
+  state: string;
+  createdAt: string;
+}
+
+export interface PayafterDashboardData {
+  kpis: PayafterKpis;
+  alerts: PayafterAlert[];
+  funnel: PayafterFunnelStep[];
+  sellers: PayafterSellerExpanded[];
+  daily: { date: string; count: number }[];
+  weeklyPaymentRate: {
+    week: string;
+    label: string;
+    taxa: number;
+    entregues: number;
+    pagos: number;
+  }[];
+  inadimplentes: PayafterInadimplenteRow[];
 }

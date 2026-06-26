@@ -50,12 +50,14 @@ export async function GET(req: NextRequest) {
     const rows = orders ?? [];
 
     const columns: KanbanColumns = {
-      pedidos_criados: [],
-      em_transito: [],
+      pedidos_criados:  [],
+      em_transito:      [],
       retirar_correios: [],
-      pagos: [],
-      devolvidos: [],
-      inadimplentes: [],
+      requer_atencao:   [],
+      entregue:         [],
+      pagos:            [],
+      devolvidos:       [],
+      inadimplentes:    [],
     };
 
     for (const o of rows) {
@@ -112,8 +114,9 @@ export async function GET(req: NextRequest) {
       paidValue: rows
         .filter((o) => o.kanban_status === "pagos")
         .reduce((s, o) => s + Number(o.value), 0),
-      inadimplentesCount: rows.filter((o) => o.kanban_status === "inadimplentes")
-        .length,
+      inadimplentesCount:   rows.filter((o) => o.kanban_status === "inadimplentes").length,
+      emTransitoCount:      rows.filter((o) => o.kanban_status === "em_transito").length,
+      requerAtencaoCount:   rows.filter((o) => o.kanban_status === "requer_atencao").length,
     };
 
     return NextResponse.json({ columns, metrics, tipo });
