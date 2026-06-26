@@ -43,7 +43,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (body.currency != null) patch.currency = String(body.currency).toUpperCase();
     if (body.isActive != null) patch.is_active = Boolean(body.isActive);
     if (body.is_active != null) patch.is_active = Boolean(body.is_active);
-    if (body.accountName != null) patch.account_name = String(body.accountName);
+    if (body.accountName != null) patch.name = String(body.accountName);
 
     const accountId = (patch.account_id as string) ?? existing.account_id;
     const accessToken = (patch.access_token as string) ?? existing.access_token;
@@ -53,7 +53,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       if (meta.error) {
         return NextResponse.json({ error: meta.error }, { status: 400 });
       }
-      if (meta.name && !patch.account_name) patch.account_name = meta.name;
+      if (meta.name && !patch.name) patch.name = meta.name;
       if (!body.currency) patch.currency = meta.currency;
     }
 
@@ -62,7 +62,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       .update(patch)
       .eq("id", id)
       .select(
-        "id, account_id, account_name, currency, is_active, created_at, access_token"
+        "id, account_id, name, currency, is_active, created_at, access_token"
       )
       .single();
 
@@ -74,7 +74,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       account: {
         id: data.id,
         accountId: data.account_id,
-        accountName: data.account_name,
+        accountName: data.name,
         currency: data.currency,
         isActive: data.is_active,
         createdAt: data.created_at,

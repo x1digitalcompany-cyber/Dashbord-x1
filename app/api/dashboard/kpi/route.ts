@@ -76,7 +76,6 @@ export async function GET(req: NextRequest) {
       pagarmeRes, pagarmePrevRes,
       paytRes, paytPrevRes,
       leadsRes, leadsPrevRes,
-      adAccountsRes,
       adSpendRes, adSpendPrevRes,
     ] = await Promise.all([
       agendQ,
@@ -85,17 +84,10 @@ export async function GET(req: NextRequest) {
       pagarmePrevQ,
       paytQ,
       paytPrevQ,
-      // Leads
       supabase.from("leads").select("id", { count: "exact", head: true })
         .gte("created_at", fromISO).lte("created_at", toISO),
       supabase.from("leads").select("id", { count: "exact", head: true })
         .gte("created_at", prevFromISO).lte("created_at", prevToISO),
-
-      // Contas Meta para busca live
-      supabase.from("ad_accounts").select("account_id, access_token, currency")
-        .eq("platform", "meta").eq("is_active", true),
-
-      // Ad spend manual (fallback / complemento)
       supabase.from("ad_spend").select("spend, currency")
         .gte("date", metaDate(from)).lte("date", metaDate(to)),
       supabase.from("ad_spend").select("spend, currency")
@@ -131,10 +123,7 @@ export async function GET(req: NextRequest) {
     let metaLeads = metaCurr?.leads ?? 0;
     let metaLeadsPrev = metaPrev?.leads ?? 0;
 
-    if (!metaCurr && adAccountsRes.data?.length) {
-      adsSpend = 0;
-      adsPrevSpend = 0;
-    } else if (!metaCurr) {
+    if (metaCurr?.mock) {
       adsSpend = (adSpendRes.data ?? []).reduce((s, r) => {
         const val = Number(r.spend);
         return s + (r.currency === "USD" ? val * Number(process.env.USD_BRL_FALLBACK_RATE ?? "5.4") : val);

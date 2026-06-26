@@ -22,9 +22,8 @@ export async function GET(req: NextRequest) {
       supabase
         .from("ad_accounts")
         .select(
-          "id, account_id, account_name, currency, platform, is_active, created_at, access_token"
+          "id, account_id, name, currency, is_active, created_at, access_token, api_version, last_fetch_at"
         )
-        .eq("platform", "meta")
         .order("created_at", { ascending: false }),
       getMetaApiVersion(),
       isMetaAdsConfigured(),
@@ -38,23 +37,19 @@ export async function GET(req: NextRequest) {
     const accounts = (accountsRes.data ?? []).map((row) => ({
       id: row.id,
       accountId: row.account_id,
-      accountName: row.account_name,
+      accountName: row.name,
       currency: row.currency,
       isActive: row.is_active,
       createdAt: row.created_at,
       tokenMasked: maskToken(row.access_token),
+      accountIdMasked: maskAccountId(row.account_id),
     }));
-
-    const envAccountId = process.env.META_ADS_AD_ACCOUNT_ID?.trim();
-    const envToken = process.env.META_ADS_ACCESS_TOKEN?.trim();
 
     return NextResponse.json({
       accounts,
       apiVersion,
       configured,
       lastFetchAt,
-      envAccountMasked: envAccountId ? maskAccountId(envAccountId) : null,
-      envTokenPresent: Boolean(envToken),
       connectionStatus: configured ? ("connected" as const) : ("not_configured" as const),
     });
   } catch (err: unknown) {
@@ -111,40 +106,33 @@ export async function POST(req: NextRequest) {
       .eq("account_id", accountId)
       .maybeSingle();
 
+    const payload = {
+      account_id: accountId,
+      name: meta.name ?? `act_${accountId}`,
+      access_token: accessToken,
+      currency,
+      api_version: apiVersion.replace(/^v?/, "v"),
+      is_active: isActive,
+      updated_at: new Date().toISOString(),
+    };
+
     let data;
     let error;
 
     if (existing?.id) {
       const result = await supabase
         .from("ad_accounts")
-        .update({
-          account_name: meta.name ?? `act_${accountId}`,
-          access_token: accessToken,
-          currency,
-          platform: "meta",
-          is_active: isActive,
-        })
+        .update(payload)
         .eq("id", existing.id)
-        .select(
-          "id, account_id, account_name, currency, is_active, created_at, access_token"
-        )
+        .select("id, account_id, name, currency, is_active, created_at, access_token")
         .single();
       data = result.data;
       error = result.error;
     } else {
       const result = await supabase
         .from("ad_accounts")
-        .insert({
-          account_id: accountId,
-          account_name: meta.name ?? `act_${accountId}`,
-          access_token: accessToken,
-          currency,
-          platform: "meta",
-          is_active: isActive,
-        })
-        .select(
-          "id, account_id, account_name, currency, is_active, created_at, access_token"
-        )
+        .insert(payload)
+        .select("id, account_id, name, currency, is_active, created_at, access_token")
         .single();
       data = result.data;
       error = result.error;
@@ -165,7 +153,7 @@ export async function POST(req: NextRequest) {
       account: {
         id: data.id,
         accountId: data.account_id,
-        accountName: data.account_name,
+        accountName: data.name,
         currency: data.currency,
         isActive: data.is_active,
         createdAt: data.created_at,

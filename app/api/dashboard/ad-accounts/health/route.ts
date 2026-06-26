@@ -14,8 +14,7 @@ export async function GET(req: NextRequest) {
 
     const { data: accounts, error } = await supabase
       .from("ad_accounts")
-      .select("id, account_id, account_name, access_token, is_active")
-      .eq("platform", "meta")
+      .select("id, account_id, name, access_token, is_active")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -28,7 +27,7 @@ export async function GET(req: NextRequest) {
           return {
             id: acc.id,
             accountId: acc.account_id,
-            accountName: acc.account_name,
+            accountName: acc.name,
             status: "inactive" as const,
             message: "Conta desativada",
           };
@@ -41,10 +40,10 @@ export async function GET(req: NextRequest) {
         return {
           id: acc.id,
           accountId: acc.account_id,
-          accountName: acc.account_name,
+          accountName: acc.name,
           status: test.ok ? ("ok" as const) : ("error" as const),
           message: test.ok
-            ? `Conectado — ${test.metaName ?? acc.account_name}`
+            ? `Conectado — ${test.metaName ?? acc.name}`
             : test.message,
         };
       })

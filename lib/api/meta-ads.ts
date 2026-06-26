@@ -6,7 +6,7 @@
  * CONEXÃO:
  *   - fetch nativo (sem SDK Meta)
  *   - Graph API v19.0 (app_settings.meta_ads_api_version ou META_ADS_API_VERSION)
- *   - Credenciais: tabela ad_accounts (platform=meta) OU META_ADS_* no .env
+ *   - Credenciais: tabela ad_accounts (is_active=true) — configuradas em /configuracoes
  *   - account_id SEM prefixo act_; URL usa act_{account_id}
  *
  * ENDPOINTS:
@@ -99,6 +99,7 @@ export interface MetaAdsData {
   date_stop: string;
   fetched_at: string;
   mock?: boolean;
+  configured?: boolean;
   error?: string;
   source?: "meta_api" | "cache" | "mock";
 }
@@ -212,29 +213,16 @@ export async function resolveAccounts(): Promise<MetaAccountConfig[]> {
   const { data } = await supabase
     .from("ad_accounts")
     .select("account_id, access_token, currency")
-    .eq("platform", "meta")
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .limit(1);
 
-  if (data?.length) {
-    return data.map((row) => ({
-      accountId: normalizeAccountId(row.account_id),
-      accessToken: row.access_token,
-      currency: row.currency === "USD" ? "USD" : "BRL",
-    }));
-  }
+  if (!data?.length) return [];
 
-  const envToken = process.env.META_ADS_ACCESS_TOKEN?.trim();
-  const envAccount = process.env.META_ADS_AD_ACCOUNT_ID?.trim();
-  if (envToken && envAccount) {
-    return [
-      {
-        accountId: normalizeAccountId(envAccount),
-        accessToken: envToken,
-        currency: "BRL",
-      },
-    ];
-  }
-  return [];
+  return data.map((row) => ({
+    accountId: normalizeAccountId(row.account_id),
+    accessToken: row.access_token,
+    currency: row.currency === "USD" ? "USD" : "BRL",
+  }));
 }
 
 async function graphVersion(): Promise<string> {
@@ -434,8 +422,13 @@ async function writeCache(since: string, until: string, result: MetaAdsData): Pr
       fetched_at: fetchedAt.toISOString(),
       expires_at: expiresAt.toISOString(),
     },
-    { onConflict: "period_from,period_to" }
+    { onConflict: "cache_key" }
   );
+
+  await supabase
+    .from("ad_accounts")
+    .update({ last_fetch_at: fetchedAt.toISOString() })
+    .eq("is_active", true);
 }
 
 export async function getLastMetaFetchAt(): Promise<string | null> {
@@ -582,9 +575,10 @@ export async function fetchMetaAdsInsights(
   if (!accounts.length) {
     return emptyMetaData(since, until, {
       mock: true,
+      configured: false,
       source: "mock",
       error:
-        "Configure as contas Meta Ads em Configurações → Meta Ads (Account ID + Access Token).",
+        "Configure a conta Meta Ads em Configurações → Meta Ads (Account ID + Access Token).",
     });
   }
 
@@ -598,7 +592,11 @@ export async function fetchMetaAdsInsights(
     return result;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro Meta Ads API";
-    return emptyMetaData(since, until, { error: message, source: "meta_api" });
+    return emptyMetaData(since, until, {
+      configured: true,
+      error: message,
+      source: "meta_api",
+    });
   }
 }
 

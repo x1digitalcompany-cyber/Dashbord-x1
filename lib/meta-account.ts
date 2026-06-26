@@ -18,6 +18,17 @@ export function maskAccountId(accountId: string): string {
 }
 
 export async function getMetaApiVersion(): Promise<string> {
+  const { data: account } = await supabase
+    .from("ad_accounts")
+    .select("api_version")
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+
+  if (account?.api_version?.trim()) {
+    return account.api_version.trim().replace(/^v?/, "v");
+  }
+
   const { data, error } = await supabase
     .from("app_settings")
     .select("value")
@@ -108,13 +119,14 @@ export async function fetchMetaAccountInfo(
 ): Promise<{
   name: string | null;
   currency: "BRL" | "USD";
+  accountStatus: string | null;
   error: string | null;
 }> {
   const version = apiVersion ?? (await getMetaApiVersion());
   const id = normalizeAccountId(accountId);
   const url =
     `https://graph.facebook.com/${version}/act_${id}` +
-    `?fields=name,currency&access_token=${accessToken}`;
+    `?fields=name,currency,account_status&access_token=${accessToken}`;
 
   try {
     const res = await fetch(url, { cache: "no-store" });
@@ -123,6 +135,7 @@ export async function fetchMetaAccountInfo(
       return {
         name: null,
         currency: "BRL",
+        accountStatus: null,
         error: formatMetaApiError(data.error as MetaGraphError),
       };
     }
@@ -131,11 +144,33 @@ export async function fetchMetaAccountInfo(
     return {
       name: data.name ? String(data.name) : null,
       currency,
+      accountStatus: data.account_status ? String(data.account_status) : null,
       error: null,
     };
   } catch (err) {
-    return { name: null, currency: "BRL", error: String(err) };
+    return { name: null, currency: "BRL", accountStatus: null, error: String(err) };
   }
+}
+
+export async function testMetaAdsConnection(
+  accountId: string,
+  accessToken: string,
+  apiVersion?: string
+): Promise<{
+  ok: boolean;
+  name?: string;
+  currency?: string;
+  account_status?: string;
+  error?: string;
+}> {
+  const info = await fetchMetaAccountInfo(accountId, accessToken, apiVersion);
+  if (info.error) return { ok: false, error: info.error };
+  return {
+    ok: true,
+    name: info.name ?? undefined,
+    currency: info.currency,
+    account_status: info.accountStatus ?? undefined,
+  };
 }
 
 export async function testMetaAccount(
