@@ -72,8 +72,7 @@ function WebhookCard({
       </div>
 
       <p className="mb-3 text-xs text-gray-500">
-        Header: <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">X-Five-Secret</code>{" "}
-        com o valor de <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">FIVE_WEBHOOK_SECRET_*</code>
+        O <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">?secret=</code> já está incluído na URL acima — cole a URL completa na Five.
       </p>
 
       {info.lastReceived ? (
@@ -199,9 +198,9 @@ export function WebhooksSettings() {
           <div className="rounded-lg border border-dashed border-gray-200 p-3 text-xs text-gray-500 dark:border-gray-700">
             <p className="mb-1 font-medium text-gray-700 dark:text-gray-300">Na plataforma Five:</p>
             <ol className="list-decimal space-y-1 pl-4">
-              <li>Cole a URL do webhook correspondente à operação</li>
+              <li>Cole a URL completa do webhook (o <code>?secret=…</code> já está incluso)</li>
               <li>Método POST, formato JSON</li>
-              <li>Adicione header <code>X-Five-Secret</code> com o secret do .env.local</li>
+              <li>Nenhum header extra — a autenticação é via query param na URL</li>
             </ol>
           </div>
         </div>

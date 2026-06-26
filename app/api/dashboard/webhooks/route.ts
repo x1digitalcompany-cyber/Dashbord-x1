@@ -37,6 +37,8 @@ export async function GET(req: NextRequest) {
   }
 
   const base = process.env.NEXTAUTH_URL ?? req.nextUrl.origin;
+  const antecipadoSecret = process.env.FIVE_WEBHOOK_SECRET_ANTECIPADO?.trim() ?? "";
+  const agendadoSecret = process.env.FIVE_WEBHOOK_SECRET_AGENDADO?.trim() ?? "";
 
   const [antecipadoLog, agendadoLog] = await Promise.all([
     lastLog("antecipado"),
@@ -45,8 +47,8 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     antecipado: {
-      url: `${base}/api/webhooks/five/antecipado`,
-      secretConfigured: Boolean(process.env.FIVE_WEBHOOK_SECRET_ANTECIPADO?.trim()),
+      url: `${base}/api/webhooks/five/antecipado${antecipadoSecret ? `?secret=${antecipadoSecret}` : ""}`,
+      secretConfigured: Boolean(antecipadoSecret),
       lastReceived: antecipadoLog
         ? {
             orderNumber: antecipadoLog.order_number,
@@ -56,8 +58,8 @@ export async function GET(req: NextRequest) {
         : null,
     },
     agendado: {
-      url: `${base}/api/webhooks/five/agendado`,
-      secretConfigured: Boolean(process.env.FIVE_WEBHOOK_SECRET_AGENDADO?.trim()),
+      url: `${base}/api/webhooks/five/agendado${agendadoSecret ? `?secret=${agendadoSecret}` : ""}`,
+      secretConfigured: Boolean(agendadoSecret),
       lastReceived: agendadoLog
         ? {
             orderNumber: agendadoLog.order_number,
@@ -82,17 +84,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "source inválido" }, { status: 400 });
   }
 
-  const secret =
+  const secret = (
     source === "antecipado"
       ? process.env.FIVE_WEBHOOK_SECRET_ANTECIPADO
-      : process.env.FIVE_WEBHOOK_SECRET_AGENDADO;
+      : process.env.FIVE_WEBHOOK_SECRET_AGENDADO
+  )?.trim() ?? "";
 
-  const testReq = new NextRequest(req.url, {
+  const base = process.env.NEXTAUTH_URL ?? req.nextUrl.origin;
+  const webhookPath =
+    source === "antecipado"
+      ? "/api/webhooks/five/antecipado"
+      : "/api/webhooks/five/agendado";
+  const webhookUrl = new URL(`${base}${webhookPath}`);
+  if (secret) webhookUrl.searchParams.set("secret", secret);
+
+  const testReq = new NextRequest(webhookUrl.toString(), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(secret ? { "X-Five-Secret": secret } : {}),
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       ...TEST_PAYLOAD,
       orderId: `TEST-${source.toUpperCase()}-${Date.now()}`,

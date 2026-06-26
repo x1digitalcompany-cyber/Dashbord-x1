@@ -1,3 +1,63 @@
+/*
+ * ═══════════════════════════════════════════════════════════════════════════
+ * FIVE WEBHOOK — DOCUMENTAÇÃO DO FORMATO REAL (baseado no Apps Script)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * A Five envia POST com JSON puro. SEM header de autenticação.
+ * Autenticação: secret como query param na URL cadastrada na Five.
+ *   Ex: /api/webhooks/five/antecipado?secret=<FIVE_WEBHOOK_SECRET_ANTECIPADO>
+ *
+ * CAMPOS DO PAYLOAD:
+ *   orderId                        string  — ID único do pedido (chave upsert)
+ *   event                          string  — "ORDER_CREATE" ou vazio
+ *   shippingStatus                 string  — status de envio (raiz do payload)
+ *   eventStatus                    string  — alternativa ao shippingStatus
+ *   customer.name                  string
+ *   customer.mail                  string  — "pago@gmail.com" indica pago;
+ *                                            qualquer outro = DELIVERED→Cobrança
+ *   customer.phoneNumber           string
+ *   customer.address.address       string  — logradouro
+ *   customer.address.neighborhood  string  — bairro
+ *   customer.address.city          string
+ *   customer.address.state         string  — UF (ex: "SP")
+ *   customer.address.zipCode       string
+ *   product.name                   string
+ *   product.offer.title            string
+ *   product.offer.price            string  — valor monetário (ex: "99.90")
+ *   shipping.shippingCode          string  — código de rastreio
+ *   shipping.shippingStatus        string  — mesmo que raiz, lido como fallback
+ *   shipping.platform              string  — transportadora
+ *   project.name                   string
+ *
+ * LEITURA DE shippingStatus (por ordem de prioridade):
+ *   payload.shippingStatus || payload.shipping.shippingStatus || payload.eventStatus
+ *
+ * MAPEAMENTO shippingStatus → kanban_status:
+ *   ORDER_CREATE (event)              → chegou
+ *   SENDED                            → chegou
+ *   IN_TRANSIT                        → chegou
+ *   POSTED / SHIPPED                  → chegou
+ *   IN_TRANSIT_TO_DELIVERY            → chegou
+ *   OUT_FOR_DELIVERY                  → chegou
+ *   READY_FOR_PICKUP                  → retirar_correios
+ *   AWAITING_PICKUP                   → retirar_correios
+ *   AVAILABLE_FOR_PICKUP              → retirar_correios
+ *   WAITING_PICKUP                    → retirar_correios
+ *   POST_OFFICE                       → retirar_correios
+ *   DELIVERY_FAILED                   → retirar_correios (prioridade alta)
+ *   DELIVERED + mail=pago@gmail.com   → pagos
+ *   DELIVERED + outro mail            → inadimplentes
+ *   NOT_DELIVERED                     → devolvidos
+ *   RETURNED                          → devolvidos
+ *   RETURNING_TO_ORIGIN               → devolvidos
+ *
+ * RETORNO ESPERADO PELA FIVE:
+ *   HTTP 200 sempre que o payload foi recebido (mesmo em erro interno).
+ *   Qualquer status != 200 faz a Five reenviar o webhook.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
@@ -13,7 +73,7 @@ export type FiveWebhookSource = "antecipado" | "agendado";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Five-Secret",
+  "Access-Control-Allow-Headers": "Content-Type",
   "Access-Control-Allow-Methods": "GET, POST, HEAD, OPTIONS",
 };
 
@@ -40,11 +100,7 @@ export function fiveWebhookHead() {
 }
 
 function getSecretFromRequest(req: NextRequest): string {
-  return (
-    req.headers.get("x-five-secret") ||
-    req.headers.get("X-Five-Secret") ||
-    ""
-  ).trim();
+  return (req.nextUrl.searchParams.get("secret") ?? "").trim();
 }
 
 function expectedSecret(source: FiveWebhookSource): string | undefined {
@@ -127,12 +183,12 @@ export async function processFiveWebhookPost(
       }
       // Dev: aceita sem secret mas avisa no console
       console.warn(
-        `[webhook/five/${source}] AVISO: ${envKey} não configurada — aceitando em modo dev. Reinicie o servidor após adicionar ao .env.local.`
+        `[webhook/five/${source}] AVISO: ${envKey} não configurada — aceitando em modo dev. Em produção a Five deve enviar a URL com ?secret=VALOR.`
       );
     } else {
       const incoming = getSecretFromRequest(req);
       if (incoming !== secret) {
-        return json(401, { ok: false, error: "Secret inválido (header X-Five-Secret)." });
+        return json(401, { ok: false, error: "Secret inválido (query param ?secret=)." });
       }
     }
   }
@@ -206,6 +262,7 @@ export async function processFiveWebhookPost(
     const message = err instanceof Error ? err.message : "Erro ao salvar pedido";
     await logWebhook(source, orderNumber, data, null, message);
     console.error(`[webhook/five/${source}]`, message, err);
-    return json(500, { ok: false, error: message });
+    // HTTP 200 mesmo em erro interno: evita que a Five marque como falha e reenvie o webhook.
+    return json(200, { received: true, type: source, orderId: orderNumber, warning: message });
   }
 }
