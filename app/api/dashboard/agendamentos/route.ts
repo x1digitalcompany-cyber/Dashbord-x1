@@ -34,6 +34,8 @@ export async function GET(req: NextRequest) {
         .from("orders")
         .select("id, payment_type, kanban_status, created_at, seller_id, customer_name")
         .in("payment_type", ["payafter", "agendado"])
+        .neq("customer_email", "cliente@example.com")
+        .not("customer_name", "ilike", "%cliente fict%")
         .gte("created_at", fromISO)
         .lte("created_at", toISO);
       if (sellerIds.length) ordQuery = ordQuery.in("seller_id", sellerIds);

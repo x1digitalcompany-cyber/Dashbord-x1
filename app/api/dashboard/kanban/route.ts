@@ -28,6 +28,8 @@ export async function GET(req: NextRequest) {
         paid_at, created_at, updated_at,
         sellers ( name )
       `)
+      .neq("customer_email", "cliente@example.com")
+      .not("customer_name", "ilike", "%cliente fict%")
       .order("updated_at", { ascending: false })
       .limit(500);
 

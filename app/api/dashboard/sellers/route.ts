@@ -27,6 +27,8 @@ export async function GET(req: NextRequest) {
       .from("orders")
       .select("seller_id")
       .in("seller_id", sellers.map((s) => s.id))
+      .neq("customer_email", "cliente@example.com")
+      .not("customer_name", "ilike", "%cliente fict%")
       .gte("created_at", from.toISOString())
       .lte("created_at", to.toISOString());
     if (ordersErr) throw ordersErr;

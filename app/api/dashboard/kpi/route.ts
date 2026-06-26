@@ -59,24 +59,36 @@ export async function GET(req: NextRequest) {
     ] = await Promise.all([
       // Agendamentos — todos os pedidos do período
       supabase.from("orders").select("id", { count: "exact", head: true })
+        .neq("customer_email", "cliente@example.com")
+        .not("customer_name", "ilike", "%cliente fict%")
         .gte("created_at", fromISO).lte("created_at", toISO),
       supabase.from("orders").select("id", { count: "exact", head: true })
+        .neq("customer_email", "cliente@example.com")
+        .not("customer_name", "ilike", "%cliente fict%")
         .gte("created_at", prevFromISO).lte("created_at", prevToISO),
 
       // Pagar.me — pedidos pagos no gateway pagarme
       supabase.from("orders").select("value")
         .eq("gateway", "pagarme").eq("kanban_status", "pagos")
+        .neq("customer_email", "cliente@example.com")
+        .not("customer_name", "ilike", "%cliente fict%")
         .gte("created_at", fromISO).lte("created_at", toISO),
       supabase.from("orders").select("value")
         .eq("gateway", "pagarme").eq("kanban_status", "pagos")
+        .neq("customer_email", "cliente@example.com")
+        .not("customer_name", "ilike", "%cliente fict%")
         .gte("created_at", prevFromISO).lte("created_at", prevToISO),
 
       // Payt — pedidos pagos no gateway payt
       supabase.from("orders").select("value")
         .eq("gateway", "payt").eq("kanban_status", "pagos")
+        .neq("customer_email", "cliente@example.com")
+        .not("customer_name", "ilike", "%cliente fict%")
         .gte("created_at", fromISO).lte("created_at", toISO),
       supabase.from("orders").select("value")
         .eq("gateway", "payt").eq("kanban_status", "pagos")
+        .neq("customer_email", "cliente@example.com")
+        .not("customer_name", "ilike", "%cliente fict%")
         .gte("created_at", prevFromISO).lte("created_at", prevToISO),
 
       // Leads

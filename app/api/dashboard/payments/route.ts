@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import type { PaymentRow, PaymentStatus, PagamentosExpanded } from "@/types";
 
-const ALL_KANBAN = ["chegou", "retirar_correios", "pagos", "devolvidos", "inadimplentes"];
+const ALL_KANBAN = ["pedidos_criados", "em_transito", "retirar_correios", "pagos", "devolvidos", "inadimplentes"];
 
 function kanbanToPaymentStatus(ks: string): PaymentStatus {
   if (ks === "pagos") return "approved";
@@ -24,6 +24,8 @@ export async function GET(req: NextRequest) {
         "id, order_number, customer_name, value, gateway, kanban_status, created_at"
       )
       .in("kanban_status", ALL_KANBAN)
+      .neq("customer_email", "cliente@example.com")
+      .not("customer_name", "ilike", "%cliente fict%")
       .gte("created_at", from.toISOString())
       .lte("created_at", to.toISOString())
       .order("created_at", { ascending: false });

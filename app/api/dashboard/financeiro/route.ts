@@ -134,11 +134,15 @@ export async function GET(req: NextRequest) {
         supabase
           .from("orders")
           .select("value, kanban_status, payment_type, created_at")
+          .neq("customer_email", "cliente@example.com")
+          .not("customer_name", "ilike", "%cliente fict%")
           .gte("created_at", fromISO)
           .lte("created_at", toISO),
         supabase
           .from("orders")
           .select("value, kanban_status, payment_type, created_at")
+          .neq("customer_email", "cliente@example.com")
+          .not("customer_name", "ilike", "%cliente fict%")
           .gte("created_at", prevFromISO)
           .lte("created_at", prevToISO),
         fetchMetaAdsInsights(from, to).catch((e: Error) => ({

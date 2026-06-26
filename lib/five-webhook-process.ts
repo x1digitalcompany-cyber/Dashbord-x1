@@ -164,6 +164,20 @@ async function syncAppointment(
   }
 }
 
+function isTestOrder(payload: FiveWebhookPayload): boolean {
+  const customer = payload.customer as Record<string, unknown> | undefined;
+  const email = String(customer?.mail ?? "").toLowerCase().trim();
+  const name  = String(customer?.name ?? "").toLowerCase().trim();
+  const docRaw = String(customer?.document ?? "").trim();
+  const doc  = docRaw.replace(/\D/g, "");
+  return (
+    email === "cliente@example.com" ||
+    name.includes("cliente fict") ||
+    doc === "12345678900" ||
+    docRaw === "123.456.789-00"
+  );
+}
+
 export async function processFiveWebhookPost(
   req: NextRequest,
   source: FiveWebhookSource,
@@ -219,6 +233,11 @@ export async function processFiveWebhookPost(
   const orderNumber = String(
     data.orderId || (data.order as { id?: string } | undefined)?.id || ""
   ).trim();
+
+  if (isTestOrder(data)) {
+    console.log(`[webhook/five/${source}] Ignorado: pedido de teste detectado (orderId=${orderNumber})`);
+    return json(200, { received: true, test: true, skipped: "pedido de teste ignorado" });
+  }
 
   try {
     const { data: existing, error: findError } = await supabase

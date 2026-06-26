@@ -12,6 +12,8 @@ export async function GET(req: NextRequest) {
     const { data: orders, error } = await supabase
       .from("orders")
       .select("estado, state, value, kanban_status")
+      .neq("customer_email", "cliente@example.com")
+      .not("customer_name", "ilike", "%cliente fict%")
       .gte("created_at", from.toISOString())
       .lte("created_at", to.toISOString());
 
