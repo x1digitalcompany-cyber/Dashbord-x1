@@ -75,18 +75,24 @@ export type KanbanColumn =
 export interface KanbanOrder {
   id: string;
   orderNumber: string;
+  displayId?: string;       // últimos 8 chars do UUID em maiúsculo — exibir como #XXXXXXXX
   customerName: string;
   customerEmail: string;
   customerPhone: string;
   customerCpf: string;
+  customerDoc?: string;     // documento (CPF/CNPJ bruto do payload)
   value: number;
-  paymentMethod: "PIX" | "CARD" | "BOLETO";
+  paymentMethod: string;
   status: KanbanColumn;
   trackingCode?: string;
   trackingUrl?: string;
+  shippingPlatform?: string;
   productName: string;
+  offerTitle?: string;
   sellerName?: string;
-  createdAt: string; // ISO string
+  projectName?: string;
+  addressFull?: string;     // logradouro + bairro formatado
+  createdAt: string;        // ISO string
   updatedAt?: string;
   paidAt?: string;
   address?: {

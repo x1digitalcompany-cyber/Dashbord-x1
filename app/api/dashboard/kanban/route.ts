@@ -19,10 +19,10 @@ export async function GET(req: NextRequest) {
     let query = supabase
       .from("orders")
       .select(`
-        id, order_number, customer_name, customer_email,
-        customer_phone, customer_cpf, value, payment_method,
-        gateway, kanban_status, product_name, tracking_code, tracking_url,
-        payment_type,
+        id, order_number, display_id, customer_name, customer_email,
+        customer_phone, customer_cpf, customer_doc, value, payment_method,
+        gateway, kanban_status, product_name, offer_title, tracking_code, tracking_url,
+        payment_type, seller_name, project_name, shipping_platform, address_full,
         street, number, complement, neighborhood, city, state, zip_code,
         paid_at, created_at, updated_at,
         sellers ( name )
@@ -53,24 +53,33 @@ export async function GET(req: NextRequest) {
         ? o.kanban_status
         : "chegou") as KanbanColumn;
 
+      const rawOrderNum: string = o.order_number ?? "";
       const card: KanbanOrder = {
-        id:            o.id,
-        orderNumber:   o.order_number,
-        customerName:  o.customer_name,
-        customerEmail: o.customer_email ?? "",
-        customerPhone: o.customer_phone ?? "",
-        customerCpf:   o.customer_cpf   ?? "",
-        value:         Number(o.value),
-        paymentMethod: o.payment_method as KanbanOrder["paymentMethod"],
-        status:        col,
-        productName:   o.product_name,
-        sellerName:    (o.sellers as unknown as { name: string } | null)?.name,
-        trackingCode:  o.tracking_code  ?? undefined,
-        trackingUrl:   o.tracking_url   ?? undefined,
-        createdAt:     o.created_at,
-        updatedAt:     o.updated_at,
-        paidAt:        o.paid_at        ?? undefined,
-        address:       o.street
+        id:               o.id,
+        orderNumber:      rawOrderNum,
+        displayId:        (o.display_id as string | null) ?? rawOrderNum.slice(-8).toUpperCase(),
+        customerName:     o.customer_name,
+        customerEmail:    o.customer_email ?? "",
+        customerPhone:    o.customer_phone ?? "",
+        customerCpf:      o.customer_cpf   ?? "",
+        customerDoc:      o.customer_doc   ?? undefined,
+        value:            Number(o.value),
+        paymentMethod:    o.payment_method ?? "PIX",
+        status:           col,
+        productName:      o.product_name,
+        offerTitle:       o.offer_title        ?? undefined,
+        sellerName:       (o.seller_name as string | null)
+                            ?? (o.sellers as unknown as { name: string } | null)?.name
+                            ?? undefined,
+        projectName:      o.project_name       ?? undefined,
+        shippingPlatform: o.shipping_platform  ?? undefined,
+        addressFull:      o.address_full       ?? undefined,
+        trackingCode:     o.tracking_code      ?? undefined,
+        trackingUrl:      o.tracking_url       ?? undefined,
+        createdAt:        o.created_at,
+        updatedAt:        o.updated_at,
+        paidAt:           o.paid_at            ?? undefined,
+        address:          o.street
           ? {
               street:       o.street,
               number:       o.number       ?? "",

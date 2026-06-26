@@ -131,10 +131,12 @@ export function decideFiveColumn(
   existingKanban: KanbanColumn | null
 ): FiveColumnDecision {
   const eventName = clean(payload.event);
+  // Priority: shipping.shippingStatus > shippingStatus (root) > eventStatus > event
   const shippingStatus = clean(
-    payload.shippingStatus ||
-      get(payload, "shipping.shippingStatus") ||
-      payload.eventStatus
+    get(payload, "shipping.shippingStatus") ||
+      payload.shippingStatus ||
+      payload.eventStatus ||
+      payload.event
   ).toUpperCase();
 
   const email = clean(get(payload, "customer.mail"));
@@ -261,6 +263,16 @@ export interface ExistingOrderRow {
   customer_phone?: string | null;
   tracking_code: string | null;
   paid_at: string | null;
+  seller_name?: string | null;
+  customer_doc?: string | null;
+  address_full?: string | null;
+  offer_title?: string | null;
+  shipping_platform?: string | null;
+  project_name?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
+  estado?: string | null;
 }
 
 export function buildOrderRecord(
@@ -269,25 +281,33 @@ export function buildOrderRecord(
   forcedPaymentType?: FivePaymentType
 ): {
   order_number: string;
+  display_id: string;
   customer_name: string;
   customer_email: string | null;
   customer_phone: string | null;
+  customer_doc: string | null;
   value: number;
   payment_method: string;
   gateway: string;
   kanban_status: KanbanColumn;
   product_name: string;
+  offer_title: string | null;
   tracking_code: string | null;
+  shipping_platform: string | null;
   street: string | null;
   neighborhood: string | null;
   city: string | null;
   state: string | null;
   zip_code: string | null;
+  address_full: string | null;
   estado: string | null;
+  seller_name: string | null;
+  project_name: string | null;
   payment_type: FivePaymentType;
   paid_at: string | null;
 } {
   const orderNumber = extractOrderId(payload);
+  const displayId = orderNumber.slice(-8).toUpperCase();
   const decision = decideFiveColumn(payload, existing?.kanban_status ?? null);
 
   const lockedDevolvido =
@@ -315,10 +335,12 @@ export function buildOrderRecord(
   const address = (payload.customer as Record<string, unknown> | undefined)
     ?.address as Record<string, unknown> | undefined;
 
+  // Priority: shipping.shippingStatus > shippingStatus (root) > eventStatus > event
   const shippingStatus = clean(
-    payload.shippingStatus ||
-      get(payload, "shipping.shippingStatus") ||
-      payload.eventStatus
+    get(payload, "shipping.shippingStatus") ||
+      payload.shippingStatus ||
+      payload.eventStatus ||
+      payload.event
   ).toUpperCase();
 
   let paidAt = existing?.paid_at ?? null;
@@ -329,28 +351,46 @@ export function buildOrderRecord(
   const rawState = clean(address?.state);
   const estado = normalizeUf(rawState);
 
+  // address_full: combina logradouro + bairro; preserva existente se null
+  const addrStreet = clean(address?.address);
+  const addrNeighborhood = clean(address?.neighborhood);
+  const incomingAddressFull = [addrStreet, addrNeighborhood].filter(Boolean).join(", ") || null;
+
+  // Campos que NUNCA devem sobrescrever com null — preservar valor existente
+  const sellerNameIncoming = clean(get(payload, "author.name"));
+  const customerDocIncoming = clean(get(payload, "customer.document"));
+  const cityIncoming = clean(address?.city);
+  const projectIncoming = clean(get(payload, "project.name"));
+  const offerTitleIncoming = clean(get(payload, "product.offer.title"));
+  const shippingPlatformIncoming = clean(get(payload, "shipping.platform"));
+
   return {
     order_number: orderNumber,
-    customer_name: titleName(
-      clean(get(payload, "customer.name")) || "Cliente"
-    ),
+    display_id: displayId,
+    customer_name: titleName(clean(get(payload, "customer.name")) || "Cliente"),
     customer_email: email || null,
     customer_phone: phone || null,
+    customer_doc: customerDocIncoming || existing?.customer_doc || null,
     value: parsePrice(clean(get(payload, "product.offer.price"))),
-    payment_method: "PIX",
+    payment_method: clean(get(payload, "charge.paymentMethod")) || "PIX",
     gateway: "five",
     kanban_status: kanbanStatus,
     product_name:
       clean(get(payload, "product.name")) ||
-      clean(get(payload, "product.offer.title")) ||
+      offerTitleIncoming ||
       "Produto Five",
+    offer_title: offerTitleIncoming || existing?.offer_title || null,
     tracking_code: shippingCode || existing?.tracking_code || null,
-    street: clean(address?.address) || null,
-    neighborhood: clean(address?.neighborhood) || null,
-    city: clean(address?.city) || null,
-    state: clean(address?.state) || null,
-    zip_code: clean(address?.zipCode) || null,
+    shipping_platform: shippingPlatformIncoming || existing?.shipping_platform || null,
+    street: addrStreet || null,
+    neighborhood: addrNeighborhood || null,
+    city: cityIncoming || existing?.city || null,
+    state: clean(address?.state) || existing?.state || null,
+    zip_code: clean(address?.zipCode) || existing?.zip_code || null,
+    address_full: incomingAddressFull || existing?.address_full || null,
     estado,
+    seller_name: sellerNameIncoming || existing?.seller_name || null,
+    project_name: projectIncoming || existing?.project_name || null,
     payment_type: extractPaymentType(payload, forcedPaymentType),
     paid_at: paidAt,
   };

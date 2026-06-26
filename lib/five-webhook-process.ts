@@ -223,7 +223,11 @@ export async function processFiveWebhookPost(
   try {
     const { data: existing, error: findError } = await supabase
       .from("orders")
-      .select("kanban_status, customer_email, customer_phone, tracking_code, paid_at")
+      .select(
+        "kanban_status, customer_email, customer_phone, tracking_code, paid_at, " +
+        "seller_name, customer_doc, address_full, offer_title, shipping_platform, project_name, " +
+        "city, state, zip_code, estado"
+      )
       .eq("order_number", orderNumber)
       .maybeSingle();
 

@@ -107,6 +107,7 @@ function KanbanCard({
 }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: order.id });
   const PayIcon = PAYMENT_ICON[order.paymentMethod] ?? CreditCard;
+  const shortId = order.displayId ?? order.orderNumber.slice(-8).toUpperCase();
 
   return (
     <div
@@ -122,12 +123,12 @@ function KanbanCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 mb-1">
-            <span className="text-xs font-bold text-indigo-600">{order.orderNumber}</span>
+            <span className="text-xs font-bold text-indigo-600">#{shortId}</span>
             <PayIcon size={11} className="text-gray-400 shrink-0" />
           </div>
           <p className="text-sm font-medium text-gray-900 truncate">{order.customerName}</p>
           {order.sellerName && (
-            <p className="text-xs text-gray-400 truncate">{order.sellerName}</p>
+            <p className="text-xs text-gray-400 truncate">Vendedor: {order.sellerName}</p>
           )}
         </div>
         <div className="text-right shrink-0">
@@ -172,11 +173,14 @@ function KanbanColumnComponent({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
+  const q = search.toLowerCase().replace(/^#/, "");
   const filtered = orders.filter(
     (o) =>
       !search ||
-      o.customerName.toLowerCase().includes(search.toLowerCase()) ||
-      o.orderNumber.toLowerCase().includes(search.toLowerCase())
+      o.customerName.toLowerCase().includes(q) ||
+      (o.displayId?.toLowerCase().includes(q) ?? false) ||
+      o.orderNumber.toLowerCase().includes(q) ||
+      (o.sellerName?.toLowerCase().includes(q) ?? false)
   );
 
   return (
@@ -219,13 +223,24 @@ function KanbanColumnComponent({
 
 // ─── Order Detail Modal ───────────────────────────────────────────────────────
 
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-xs text-gray-400 mb-0.5">{label}</p>
+      <div className="text-gray-700">{children}</div>
+    </div>
+  );
+}
+
 function OrderDetailModal({ order, onClose }: { order: KanbanOrder | null; onClose: () => void }) {
   if (!order) return null;
   const PayIcon = PAYMENT_ICON[order.paymentMethod] ?? CreditCard;
 
   return (
-    <Modal open={!!order} onClose={onClose} title={`Pedido ${order.orderNumber}`}>
+    <Modal open={!!order} onClose={onClose} title={`#${order.displayId ?? order.orderNumber.slice(-8).toUpperCase()}`}>
       <div className="space-y-4 text-sm">
+
+        {/* Status + valor */}
         <div className="flex items-center justify-between">
           <Badge variant={STATUS_BADGE_VARIANT[order.status]}>
             {COLUMNS.find((c) => c.id === order.status)?.label ?? order.status}
@@ -235,53 +250,56 @@ function OrderDetailModal({ order, onClose }: { order: KanbanOrder | null; onClo
           </span>
         </div>
 
+        {/* Cliente */}
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-xs text-gray-400 mb-0.5">Cliente</p>
-            <p className="font-medium text-gray-900">{order.customerName}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 mb-0.5">CPF</p>
-            <p className="font-mono text-gray-700">{order.customerCpf || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 mb-0.5">E-mail</p>
-            <p className="text-gray-700 truncate">{order.customerEmail || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 mb-0.5">Telefone</p>
-            <p className="text-gray-700">{order.customerPhone || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 mb-0.5">Produto</p>
-            <p className="text-gray-900 font-medium">{order.productName}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 mb-0.5">Vendedor</p>
-            <p className="text-gray-700">{order.sellerName ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 mb-0.5">Pagamento</p>
-            <div className="flex items-center gap-1.5">
-              <PayIcon size={13} className="text-gray-500" />
-              <span className="text-gray-700">{order.paymentMethod}</span>
-            </div>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 mb-0.5">Data do pedido</p>
-            <p className="text-gray-700">{formatDatetime(order.createdAt)}</p>
-          </div>
-          {order.paidAt && (
-            <div>
-              <p className="text-xs text-gray-400 mb-0.5">Pago em</p>
-              <p className="text-gray-700">{formatDatetime(order.paidAt)}</p>
-            </div>
+          <Field label="Cliente">
+            <span className="font-medium text-gray-900">{order.customerName}</span>
+          </Field>
+          <Field label="Documento (CPF/CNPJ)">
+            <span className="font-mono">{order.customerDoc || order.customerCpf || "—"}</span>
+          </Field>
+          <Field label="E-mail">
+            <span className="truncate block">{order.customerEmail || "—"}</span>
+          </Field>
+          <Field label="Telefone">
+            {order.customerPhone || "—"}
+          </Field>
+        </div>
+
+        {/* Produto */}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Produto">
+            <span className="font-medium text-gray-900">{order.productName}</span>
+          </Field>
+          {order.offerTitle && (
+            <Field label="Oferta">{order.offerTitle}</Field>
+          )}
+          {order.projectName && (
+            <Field label="Projeto">{order.projectName}</Field>
           )}
         </div>
 
+        {/* Vendedor + pagamento + data */}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Vendedor">{order.sellerName ?? "—"}</Field>
+          <Field label="Pagamento">
+            <div className="flex items-center gap-1.5">
+              <PayIcon size={13} className="text-gray-500" />
+              <span>{order.paymentMethod}</span>
+            </div>
+          </Field>
+          <Field label="Data do pedido">{formatDatetime(order.createdAt)}</Field>
+          {order.paidAt && (
+            <Field label="Pago em">{formatDatetime(order.paidAt)}</Field>
+          )}
+        </div>
+
+        {/* Rastreamento */}
         {order.trackingCode && (
           <div className="border border-gray-100 rounded-xl p-3 bg-gray-50">
-            <p className="text-xs text-gray-400 mb-1">Rastreamento</p>
+            <p className="text-xs text-gray-400 mb-1">
+              Rastreamento{order.shippingPlatform ? ` — ${order.shippingPlatform}` : ""}
+            </p>
             <div className="flex items-center gap-2">
               <code className="text-xs font-mono text-gray-800 flex-1">{order.trackingCode}</code>
               {order.trackingUrl && (
@@ -298,22 +316,32 @@ function OrderDetailModal({ order, onClose }: { order: KanbanOrder | null; onClo
           </div>
         )}
 
-        {order.address && (
+        {/* Endereço */}
+        {(order.addressFull || order.address) && (
           <div className="border border-gray-100 rounded-xl p-3">
             <div className="flex items-center gap-1.5 mb-2">
               <MapPin size={13} className="text-gray-400" />
               <p className="text-xs text-gray-400">Endereço de entrega</p>
             </div>
-            <p className="text-gray-700">
-              {order.address.street}, {order.address.number}
-              {order.address.complement ? ` — ${order.address.complement}` : ""}
-            </p>
-            <p className="text-gray-500 text-xs mt-0.5">
-              {order.address.neighborhood}, {order.address.city}/{order.address.state} — CEP{" "}
-              {order.address.zipCode}
-            </p>
+            {order.addressFull && !order.address && (
+              <p className="text-gray-700">{order.addressFull}</p>
+            )}
+            {order.address && (
+              <>
+                <p className="text-gray-700">
+                  {order.address.street}{order.address.number ? `, ${order.address.number}` : ""}
+                  {order.address.complement ? ` — ${order.address.complement}` : ""}
+                </p>
+                <p className="text-gray-500 text-xs mt-0.5">
+                  {order.address.neighborhood && `${order.address.neighborhood}, `}
+                  {order.address.city}/{order.address.state}
+                  {order.address.zipCode ? ` — CEP ${order.address.zipCode}` : ""}
+                </p>
+              </>
+            )}
           </div>
         )}
+
       </div>
     </Modal>
   );
@@ -482,7 +510,9 @@ export function KanbanFive({ data, loading, error, title = "Kanban Five", onMove
           <DragOverlay>
             {activeOrder && (
               <div className="bg-white rounded-xl border border-indigo-200 shadow-xl p-3 rotate-2 opacity-95">
-                <p className="text-xs font-bold text-indigo-600">{activeOrder.orderNumber}</p>
+                <p className="text-xs font-bold text-indigo-600">
+                  #{activeOrder.displayId ?? activeOrder.orderNumber.slice(-8).toUpperCase()}
+                </p>
                 <p className="text-sm font-medium text-gray-900">{activeOrder.customerName}</p>
                 <p className="text-sm font-bold text-gray-900 tabular-nums">
                   {formatCurrency(activeOrder.value)}
