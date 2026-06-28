@@ -9,27 +9,25 @@ import {
   Legend,
 } from "recharts";
 import { PagamentosTable } from "@/components/dashboard/PagamentosTable";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFetchOnFilters } from "@/contexts/DashboardFiltersContext";
-import { formatCurrency, formatDatetime } from "@/lib/utils";
-import type { PagamentosExpanded, PaymentGateway } from "@/types";
+import { formatCurrency } from "@/lib/utils";
+import type { PagamentosExpanded, PagarmePaymentStats, PaytBraipPaymentStats } from "@/types";
 
-const GATEWAY_LABEL: Record<PaymentGateway, string> = {
-  pagarme: "Pagar.me",
-  payt: "Payt",
-  five: "Five (webhook)",
-  braip: "Braip",
-};
+const GATEWAY_COLORS = ["#6366f1", "#f59e0b", "#10b981"];
 
-const GATEWAY_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#8b5cf6"];
-
-const STATUS_LABEL = {
-  approved: "Aprovado",
-  pending: "Pendente",
-  refunded: "Estorno",
-  chargeback: "Inadimplente",
-} as const;
+function gatewaySummary(stats: PagarmePaymentStats | PaytBraipPaymentStats, isPagarme: boolean) {
+  const estornosValor = isPagarme
+    ? (stats as PagarmePaymentStats).estornos_valor
+    : (stats as PaytBraipPaymentStats).reembolsos_valor;
+  const estornosCount = isPagarme
+    ? (stats as PagarmePaymentStats).estornos_count
+    : (stats as PaytBraipPaymentStats).reembolsos_count;
+  return {
+    valor: stats.aprovados_valor + stats.pendentes_valor + estornosValor,
+    transacoes: stats.aprovados_count + stats.pendentes_count + estornosCount,
+  };
+}
 
 export default function PagamentosPage() {
   const data = useFetchOnFilters<PagamentosExpanded>(async (params, signal) => {
@@ -44,10 +42,12 @@ export default function PagamentosPage() {
     return (
       <div className="mx-auto max-w-[1000px] space-y-5">
         <Skeleton className="h-24 rounded-2xl" />
-        <div className="grid grid-cols-2 gap-5">
-          <Skeleton className="h-72 rounded-2xl" />
-          <Skeleton className="h-72 rounded-2xl" />
+        <div className="grid grid-cols-3 gap-5">
+          <Skeleton className="h-28 rounded-2xl" />
+          <Skeleton className="h-28 rounded-2xl" />
+          <Skeleton className="h-28 rounded-2xl" />
         </div>
+        <Skeleton className="h-72 rounded-2xl" />
       </div>
     );
   }
@@ -63,12 +63,15 @@ export default function PagamentosPage() {
   const d = data.data;
   if (!d) return null;
 
-  const pieData = d.byGateway
-    .filter((g) => g.volume > 0)
-    .map((g) => ({
-      name: GATEWAY_LABEL[g.gateway],
-      value: g.volume,
-    }));
+  const gateways = [
+    { key: "pagarme", label: "Pagar.me", ...gatewaySummary(d.pagarme, true) },
+    { key: "payt", label: "Payt", ...gatewaySummary(d.payt, false) },
+    { key: "braip", label: "Braip", ...gatewaySummary(d.braip, false) },
+  ];
+
+  const pieData = gateways
+    .filter((g) => g.valor > 0)
+    .map((g) => ({ name: g.label, value: g.valor }));
 
   return (
     <div className="mx-auto max-w-[1000px] space-y-6">
@@ -77,28 +80,26 @@ export default function PagamentosPage() {
           Total consolidado
         </p>
         <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
-          {formatCurrency(d.totalVolume)}
+          {formatCurrency(d.total.valor)}
         </p>
-        <p className="text-sm text-gray-500">{d.totalCount} transações</p>
+        <p className="text-sm text-gray-500">{d.total.transacoes} transações</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        {d.byGateway.map((g) => (
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        {gateways.map((g) => (
           <div
-            key={g.gateway}
+            key={g.key}
             className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-950"
           >
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              {GATEWAY_LABEL[g.gateway]}
-            </p>
-            <p className="mt-1 text-xl font-bold">{formatCurrency(g.volume)}</p>
-            <p className="text-xs text-gray-400">{g.count} transações</p>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{g.label}</p>
+            <p className="mt-1 text-xl font-bold">{formatCurrency(g.valor)}</p>
+            <p className="text-xs text-gray-400">{g.transacoes} transações</p>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <PagamentosTable data={d.rows} loading={false} />
+        <PagamentosTable data={d} loading={false} />
 
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950">
           <h3 className="mb-4 text-sm font-semibold">Distribuição por gateway</h3>
@@ -127,57 +128,6 @@ export default function PagamentosPage() {
           ) : (
             <p className="text-sm text-gray-400">Sem dados no período.</p>
           )}
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-950">
-        <h3 className="border-b border-gray-100 px-5 py-4 text-sm font-semibold dark:border-gray-800">
-          Últimas transações
-        </h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-50 text-left text-xs text-gray-400 dark:border-gray-800">
-                <th className="px-5 py-3">Pedido</th>
-                <th className="px-5 py-3">Cliente</th>
-                <th className="px-5 py-3">Gateway</th>
-                <th className="px-5 py-3">Status</th>
-                <th className="px-5 py-3 text-right">Valor</th>
-                <th className="px-5 py-3">Data</th>
-              </tr>
-            </thead>
-            <tbody>
-              {d.recent.map((row) => (
-                <tr
-                  key={row.id}
-                  className="border-b border-gray-50 last:border-0 dark:border-gray-800"
-                >
-                  <td className="px-5 py-3 font-mono text-xs">{row.orderNumber}</td>
-                  <td className="px-5 py-3">{row.customerName}</td>
-                  <td className="px-5 py-3">{GATEWAY_LABEL[row.gateway]}</td>
-                  <td className="px-5 py-3">
-                    <Badge
-                      variant={
-                        row.status === "approved"
-                          ? "green"
-                          : row.status === "pending"
-                            ? "amber"
-                            : "red"
-                      }
-                    >
-                      {STATUS_LABEL[row.status]}
-                    </Badge>
-                  </td>
-                  <td className="px-5 py-3 text-right font-medium">
-                    {formatCurrency(row.value)}
-                  </td>
-                  <td className="px-5 py-3 text-gray-400">
-                    {formatDatetime(row.createdAt)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

@@ -2,27 +2,56 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { parseFromToParams } from "@/lib/period";
 import { parseSellerParam } from "@/lib/seller-filter";
-import type { PaymentRow, PaymentStatus, PagamentosExpanded, PaymentSourceBreakdown } from "@/types";
-
-const ALL_KANBAN = ["pedidos_criados", "em_transito", "retirar_correios", "pagos", "devolvidos", "inadimplentes", "entregue"];
+import type {
+  PaymentRow,
+  PagamentosExpanded,
+  PagarmePaymentStats,
+  PaytBraipPaymentStats,
+} from "@/types";
 
 const PAYT_APPROVED = ["approved", "paid", "complete", "completed"];
 const PAYT_PENDING = ["pending", "waiting", "processing"];
 const PAYT_REFUNDED = ["refunded", "cancelled", "canceled", "chargeback"];
 
-function emptyBreakdown(): PaymentSourceBreakdown {
+function emptyPagarme(): PagarmePaymentStats {
   return {
-    aprovados: { count: 0, valor: 0 },
-    pendentes: { count: 0, valor: 0 },
-    reembolsos: { count: 0, valor: 0 },
+    aprovados_valor: 0,
+    aprovados_count: 0,
+    pendentes_valor: 0,
+    pendentes_count: 0,
+    estornos_valor: 0,
+    estornos_count: 0,
   };
 }
 
-function kanbanToPaymentStatus(ks: string): PaymentStatus {
-  if (ks === "pagos") return "approved";
-  if (ks === "devolvidos") return "refunded";
-  if (ks === "inadimplentes") return "chargeback";
-  return "pending";
+function emptyPaytBraip(): PaytBraipPaymentStats {
+  return {
+    aprovados_valor: 0,
+    aprovados_count: 0,
+    pendentes_valor: 0,
+    pendentes_count: 0,
+    reembolsos_valor: 0,
+    reembolsos_count: 0,
+  };
+}
+
+function statsToRows(
+  pagarme: PagarmePaymentStats,
+  payt: PaytBraipPaymentStats,
+  braip: PaytBraipPaymentStats
+): PaymentRow[] {
+  const rows: PaymentRow[] = [
+    { gateway: "pagarme", status: "approved", volume: pagarme.aprovados_valor, count: pagarme.aprovados_count },
+    { gateway: "pagarme", status: "pending", volume: pagarme.pendentes_valor, count: pagarme.pendentes_count },
+    { gateway: "pagarme", status: "refunded", volume: pagarme.estornos_valor, count: pagarme.estornos_count },
+    { gateway: "payt", status: "approved", volume: payt.aprovados_valor, count: payt.aprovados_count },
+    { gateway: "payt", status: "pending", volume: payt.pendentes_valor, count: payt.pendentes_count },
+    { gateway: "payt", status: "refunded", volume: payt.reembolsos_valor, count: payt.reembolsos_count },
+    { gateway: "braip", status: "approved", volume: braip.aprovados_valor, count: braip.aprovados_count },
+    { gateway: "braip", status: "pending", volume: braip.pendentes_valor, count: braip.pendentes_count },
+    { gateway: "braip", status: "refunded", volume: braip.reembolsos_valor, count: braip.reembolsos_count },
+  ];
+  return rows.filter((r) => r.count > 0 || r.volume > 0);
 }
 
 export async function GET(req: NextRequest) {
@@ -32,206 +61,109 @@ export async function GET(req: NextRequest) {
   const sellerName = parseSellerParam(searchParams);
 
   try {
-    let ordersQuery = supabase
+    let pagarmeQuery = supabase
       .from("orders")
-      .select(
-        "id, order_number, customer_name, value, gateway, kanban_status, created_at, seller_name, payment_type"
-      )
-      .in("kanban_status", ALL_KANBAN)
+      .select("value, kanban_status")
+      .eq("gateway", "pagarme")
       .neq("customer_email", "cliente@example.com")
       .not("customer_name", "ilike", "%cliente fict%")
       .gte("created_at", from.toISOString())
-      .lte("created_at", to.toISOString())
-      .order("created_at", { ascending: false });
-    if (sellerName) ordersQuery = ordersQuery.eq("seller_name", sellerName);
+      .lte("created_at", to.toISOString());
+    if (sellerName) pagarmeQuery = pagarmeQuery.eq("seller_name", sellerName);
 
     const paytQuery = supabase
       .from("payt_payments")
-      .select("id, transaction_id, customer_name, amount, status, created_at")
+      .select("amount, status")
       .gte("created_at", from.toISOString())
-      .lte("created_at", to.toISOString())
-      .order("created_at", { ascending: false });
+      .lte("created_at", to.toISOString());
 
     const braipQuery = supabase
       .from("braip_payments")
-      .select("id, transaction_id, customer_name, amount, status, created_at")
+      .select("amount, status")
       .gte("created_at", from.toISOString())
-      .lte("created_at", to.toISOString())
-      .order("created_at", { ascending: false });
+      .lte("created_at", to.toISOString());
 
-    const [ordersRes, paytRes, braipRes] = await Promise.all([
-      ordersQuery,
+    const [pagarmeRes, paytRes, braipRes] = await Promise.all([
+      pagarmeQuery,
       paytQuery,
       braipQuery,
     ]);
 
-    if (ordersRes.error) throw ordersRes.error;
+    if (pagarmeRes.error) throw pagarmeRes.error;
 
-    const orders = ordersRes.data ?? [];
-    const paytPayments = paytRes.data ?? [];
-    const braipPayments = braipRes.data ?? [];
-
-    const map: Record<string, { volume: number; count: number }> = {};
-
-    for (const o of orders) {
-      const gateway = o.gateway === "five" ? "five" : o.gateway;
-      const status = kanbanToPaymentStatus(o.kanban_status);
-      const key = `${gateway}::${status}`;
-      if (!map[key]) map[key] = { volume: 0, count: 0 };
-      map[key].volume += Number(o.value) || 0;
-      map[key].count += 1;
+    const pagarme = emptyPagarme();
+    for (const o of pagarmeRes.data ?? []) {
+      const val = Number(o.value) || 0;
+      if (o.kanban_status === "pagos") {
+        pagarme.aprovados_count += 1;
+        pagarme.aprovados_valor += val;
+      } else if (o.kanban_status === "devolvidos" || o.kanban_status === "inadimplentes") {
+        pagarme.estornos_count += 1;
+        pagarme.estornos_valor += val;
+      } else {
+        pagarme.pendentes_count += 1;
+        pagarme.pendentes_valor += val;
+      }
     }
 
-    for (const p of paytPayments) {
-      const status = PAYT_APPROVED.includes(p.status)
-        ? "approved"
-        : PAYT_REFUNDED.includes(p.status)
-          ? "refunded"
-          : "pending";
-      const key = `payt::${status}`;
-      if (!map[key]) map[key] = { volume: 0, count: 0 };
-      map[key].volume += Number(p.amount) || 0;
-      map[key].count += 1;
+    const payt = emptyPaytBraip();
+    for (const p of paytRes.data ?? []) {
+      const val = Number(p.amount) || 0;
+      if (PAYT_APPROVED.includes(p.status)) {
+        payt.aprovados_count += 1;
+        payt.aprovados_valor += val;
+      } else if (PAYT_PENDING.includes(p.status)) {
+        payt.pendentes_count += 1;
+        payt.pendentes_valor += val;
+      } else if (PAYT_REFUNDED.includes(p.status)) {
+        payt.reembolsos_count += 1;
+        payt.reembolsos_valor += val;
+      }
     }
 
-    for (const p of braipPayments) {
-      const status = PAYT_APPROVED.includes(p.status)
-        ? "approved"
-        : PAYT_REFUNDED.includes(p.status)
-          ? "refunded"
-          : "pending";
-      const key = `braip::${status}`;
-      if (!map[key]) map[key] = { volume: 0, count: 0 };
-      map[key].volume += Number(p.amount) || 0;
-      map[key].count += 1;
+    const braip = emptyPaytBraip();
+    for (const p of braipRes.data ?? []) {
+      const val = Number(p.amount) || 0;
+      if (PAYT_APPROVED.includes(p.status)) {
+        braip.aprovados_count += 1;
+        braip.aprovados_valor += val;
+      } else if (PAYT_PENDING.includes(p.status)) {
+        braip.pendentes_count += 1;
+        braip.pendentes_valor += val;
+      } else if (PAYT_REFUNDED.includes(p.status)) {
+        braip.reembolsos_count += 1;
+        braip.reembolsos_valor += val;
+      }
     }
 
-    const rows: PaymentRow[] = Object.entries(map).map(([key, data]) => {
-      const [gateway, status] = key.split("::");
+    const gatewayTotal = (g: PagarmePaymentStats | PaytBraipPaymentStats, isPagarme: boolean) => {
+      const estornos = isPagarme
+        ? (g as PagarmePaymentStats).estornos_valor
+        : (g as PaytBraipPaymentStats).reembolsos_valor;
+      const estornosCount = isPagarme
+        ? (g as PagarmePaymentStats).estornos_count
+        : (g as PaytBraipPaymentStats).reembolsos_count;
       return {
-        gateway: gateway as PaymentRow["gateway"],
-        status: status as PaymentStatus,
-        ...data,
+        valor: g.aprovados_valor + g.pendentes_valor + estornos,
+        count: g.aprovados_count + g.pendentes_count + estornosCount,
       };
-    });
+    };
+
+    const pagarmeTot = gatewayTotal(pagarme, true);
+    const paytTot = gatewayTotal(payt, false);
+    const braipTot = gatewayTotal(braip, false);
+
+    const total = {
+      valor: pagarmeTot.valor + paytTot.valor + braipTot.valor,
+      transacoes: pagarmeTot.count + paytTot.count + braipTot.count,
+    };
 
     if (!expanded) {
+      const rows = statsToRows(pagarme, payt, braip);
       return NextResponse.json(rows);
     }
 
-    const five = emptyBreakdown();
-    for (const o of orders) {
-      const val = Number(o.value) || 0;
-      if (o.kanban_status === "pagos") {
-        five.aprovados.count += 1;
-        five.aprovados.valor += val;
-      } else if (o.kanban_status === "entregue") {
-        five.pendentes.count += 1;
-        five.pendentes.valor += val;
-      } else if (o.kanban_status === "devolvidos") {
-        five.reembolsos!.count += 1;
-        five.reembolsos!.valor += val;
-      }
-    }
-
-    const payt = emptyBreakdown();
-    for (const p of paytPayments) {
-      const val = Number(p.amount) || 0;
-      if (PAYT_APPROVED.includes(p.status)) {
-        payt.aprovados.count += 1;
-        payt.aprovados.valor += val;
-      } else if (PAYT_PENDING.includes(p.status)) {
-        payt.pendentes.count += 1;
-        payt.pendentes.valor += val;
-      } else if (PAYT_REFUNDED.includes(p.status)) {
-        payt.reembolsos!.count += 1;
-        payt.reembolsos!.valor += val;
-      }
-    }
-
-    const braip = emptyBreakdown();
-    for (const p of braipPayments) {
-      const val = Number(p.amount) || 0;
-      if (PAYT_APPROVED.includes(p.status)) {
-        braip.aprovados.count += 1;
-        braip.aprovados.valor += val;
-      } else if (PAYT_PENDING.includes(p.status)) {
-        braip.pendentes.count += 1;
-        braip.pendentes.valor += val;
-      } else if (PAYT_REFUNDED.includes(p.status)) {
-        braip.reembolsos!.count += 1;
-        braip.reembolsos!.valor += val;
-      }
-    }
-
-    const totalVolume = rows.reduce((s, r) => s + r.volume, 0);
-    const totalCount = rows.reduce((s, r) => s + r.count, 0);
-
-    const byGateway = ["pagarme", "payt", "five", "braip"].map((gw) => {
-      const gwRows = rows.filter((r) => r.gateway === gw);
-      return {
-        gateway: gw as PaymentRow["gateway"],
-        volume: gwRows.reduce((s, r) => s + r.volume, 0),
-        count: gwRows.reduce((s, r) => s + r.count, 0),
-      };
-    });
-
-    const recentOrders = orders.slice(0, 15).map((o) => ({
-      id: o.id,
-      orderNumber: o.order_number,
-      customerName: o.customer_name,
-      value: Number(o.value),
-      gateway: o.gateway as PaymentRow["gateway"],
-      status: kanbanToPaymentStatus(o.kanban_status),
-      createdAt: o.created_at,
-    }));
-
-    const recentPayt = paytPayments.slice(0, 5).map((p) => ({
-      id: p.id,
-      orderNumber: p.transaction_id,
-      customerName: p.customer_name ?? "—",
-      value: Number(p.amount),
-      gateway: "payt" as const,
-      status: (PAYT_APPROVED.includes(p.status)
-        ? "approved"
-        : PAYT_REFUNDED.includes(p.status)
-          ? "refunded"
-          : "pending") as PaymentStatus,
-      createdAt: p.created_at,
-    }));
-
-    const recentBraip = braipPayments.slice(0, 5).map((p) => ({
-      id: p.id,
-      orderNumber: p.transaction_id,
-      customerName: p.customer_name ?? "—",
-      value: Number(p.amount),
-      gateway: "braip" as const,
-      status: (PAYT_APPROVED.includes(p.status)
-        ? "approved"
-        : PAYT_REFUNDED.includes(p.status)
-          ? "refunded"
-          : "pending") as PaymentStatus,
-      createdAt: p.created_at,
-    }));
-
-    const recent = [...recentOrders, ...recentPayt, ...recentBraip]
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, 20);
-
-    const result: PagamentosExpanded = {
-      rows,
-      totalVolume,
-      totalCount,
-      byGateway,
-      sources: {
-        five,
-        payt,
-        braip,
-        total: { valor: totalVolume, transacoes: totalCount },
-      },
-      recent,
-    };
-
+    const result: PagamentosExpanded = { pagarme, payt, braip, total };
     return NextResponse.json(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Erro ao buscar pagamentos";

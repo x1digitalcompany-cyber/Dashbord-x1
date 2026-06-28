@@ -203,32 +203,29 @@ export interface AgendamentosExpanded {
   bySeller: SellerAgendamento[];
 }
 
-export interface PaymentSourceBreakdown {
-  aprovados: { count: number; valor: number };
-  pendentes: { count: number; valor: number };
-  reembolsos?: { count: number; valor: number };
+export interface PagarmePaymentStats {
+  aprovados_valor: number;
+  aprovados_count: number;
+  pendentes_valor: number;
+  pendentes_count: number;
+  estornos_valor: number;
+  estornos_count: number;
+}
+
+export interface PaytBraipPaymentStats {
+  aprovados_valor: number;
+  aprovados_count: number;
+  pendentes_valor: number;
+  pendentes_count: number;
+  reembolsos_valor: number;
+  reembolsos_count: number;
 }
 
 export interface PagamentosExpanded {
-  rows: PaymentRow[];
-  totalVolume: number;
-  totalCount: number;
-  byGateway: { gateway: PaymentGateway; volume: number; count: number }[];
-  sources?: {
-    five: PaymentSourceBreakdown;
-    payt: PaymentSourceBreakdown;
-    braip: PaymentSourceBreakdown;
-    total: { valor: number; transacoes: number };
-  };
-  recent: {
-    id: string;
-    orderNumber: string;
-    customerName: string;
-    value: number;
-    gateway: PaymentGateway;
-    status: PaymentStatus;
-    createdAt: string;
-  }[];
+  pagarme: PagarmePaymentStats;
+  payt: PaytBraipPaymentStats;
+  braip: PaytBraipPaymentStats;
+  total: { valor: number; transacoes: number };
 }
 
 // ─── PayAfter / Agendamentos ─────────────────────────────────────────────────
