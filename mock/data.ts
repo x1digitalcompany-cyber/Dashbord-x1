@@ -35,6 +35,7 @@ export const MOCK_KPI: KpiData = {
     gastoAnuncios: 14823.4,
     totalVendas: 198,
     agendamentosCriados: 87,
+    valorAgendamentosCriados: 12450,
   },
 };
 

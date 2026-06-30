@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
 
     let agendCriadosQ = supabase
       .from("orders")
-      .select("id", { count: "exact", head: true })
+      .select("value")
       .eq("payment_type", "agendado")
       .eq("kanban_status", "pedidos_criados")
       .neq("customer_email", "cliente@example.com")
@@ -178,7 +178,11 @@ export async function GET(req: NextRequest) {
     ]);
 
     const orders = (ordersRes.data ?? []) as OrderRow[];
-    const agendamentosCriados = agendCriadosRes.count ?? 0;
+    const agendCriadosRows = agendCriadosRes.data ?? [];
+    const agendamentosCriados = agendCriadosRows.length;
+    const valorAgendamentosCriados = round2(
+      agendCriadosRows.reduce((s, r) => s + Number(r.value), 0)
+    );
     const currAgend = agendRes.count ?? 0;
     const prevAgend = agendPrevRes.count ?? 0;
 
@@ -253,6 +257,7 @@ export async function GET(req: NextRequest) {
         gastoAnuncios: round2(adsSpend),
         totalVendas: countSales(orders),
         agendamentosCriados,
+        valorAgendamentosCriados,
       },
     };
 

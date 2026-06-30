@@ -416,6 +416,11 @@ export function DashboardFinanceGrid() {
         iconBg="bg-sky-100"
         iconColor="text-sky-600"
         value={formatNumber(f.agendamentosCriados)}
+        valueAddon={
+          <span className="text-lg tabular-nums text-gray-500 dark:text-gray-400">
+            {formatCurrency(f.valorAgendamentosCriados)}
+          </span>
+        }
         subtext="Pedidos agendados criados"
       />
       <FinanceCard

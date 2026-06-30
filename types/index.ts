@@ -49,6 +49,7 @@ export interface KpiData {
     gastoAnuncios: number;
     totalVendas: number;
     agendamentosCriados: number;
+    valorAgendamentosCriados: number;
   };
 }
 
