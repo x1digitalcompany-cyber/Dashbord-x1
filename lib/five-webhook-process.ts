@@ -68,6 +68,7 @@ import {
   type ExistingOrderRow,
   type FiveWebhookPayload,
 } from "@/lib/five-webhook";
+import { isFiveTestOrder } from "@/lib/five-kanban-map";
 import type { KanbanColumn } from "@/types";
 
 export type FiveWebhookSource = "antecipado" | "agendado";
@@ -170,16 +171,13 @@ async function syncAppointment(
 
 function isTestOrder(payload: FiveWebhookPayload): boolean {
   const customer = payload.customer as Record<string, unknown> | undefined;
-  const email = String(customer?.mail ?? "").toLowerCase().trim();
-  const name  = String(customer?.name ?? "").toLowerCase().trim();
-  const docRaw = String(customer?.document ?? "").trim();
-  const doc  = docRaw.replace(/\D/g, "");
-  return (
-    email === "cliente@example.com" ||
-    name.includes("cliente fict") ||
-    doc === "12345678900" ||
-    docRaw === "123.456.789-00"
-  );
+  const product = payload.product as Record<string, unknown> | undefined;
+  return isFiveTestOrder({
+    customerName: String(customer?.name ?? ""),
+    customerEmail: String(customer?.mail ?? ""),
+    customerDoc: String(customer?.document ?? ""),
+    productName: String(product?.name ?? ""),
+  });
 }
 
 export async function processFiveWebhookPost(
@@ -268,6 +266,7 @@ export async function processFiveWebhookPost(
         {
           ...record,
           webhook_source: source,
+          last_sync_source: "webhook",
           updated_at: new Date().toISOString(),
         },
         { onConflict: "order_number" }

@@ -1,4 +1,9 @@
 import type { KanbanColumn } from "@/types";
+import {
+  applyKanbanLocks,
+  isFivePaidEmail,
+  mapShippingStatusToKanban,
+} from "@/lib/five-kanban-map";
 
 export type FivePaymentType = "antecipado" | "agendado";
 
@@ -51,10 +56,6 @@ function clean(value: unknown): string {
   return String(value).trim();
 }
 
-function isPaid(email: string): boolean {
-  return email.trim().toLowerCase() === "pago@gmail.com";
-}
-
 function normalizePhone(phone: string): string {
   let digits = phone.replace(/\D/g, "");
   if (!digits) return "";
@@ -92,7 +93,7 @@ export function extractPaymentType(
   if (/payafter|pay.?after|agendad|agendamento|pos/.test(raw)) return "agendado";
 
   const email = clean(get(payload, "customer.mail"));
-  if (isPaid(email)) return "antecipado";
+  if (isFivePaidEmail(email)) return "antecipado";
   return "agendado";
 }
 
@@ -141,9 +142,9 @@ export function decideFiveColumn(
   ).toUpperCase();
 
   const email = clean(get(payload, "customer.mail"));
-  const paid = isPaid(email);
+  const paid = isFivePaidEmail(email);
 
-  if (eventName === "ORDER_CREATE") {
+  if (eventName === "ORDER_CREATE" || shippingStatus === "IM_PREPARING") {
     return {
       column: "Pedido Criado",
       label: "Pedido criado",
@@ -161,12 +162,15 @@ export function decideFiveColumn(
     };
   }
 
-  if (shippingStatus === "DELIVERY_FAILED") {
+  if (shippingStatus === "DELIVERY_FAILED" || shippingStatus === "TAG_EXPIRED") {
     return {
       column: "Requer Atenção",
-      label: "Falha na entrega",
+      label: shippingStatus === "TAG_EXPIRED" ? "Etiqueta expirada" : "Falha na entrega",
       priority: true,
-      message: "Falha na entrega: requer atenção.",
+      message:
+        shippingStatus === "TAG_EXPIRED"
+          ? "Etiqueta expirada: requer atenção."
+          : "Falha na entrega: requer atenção.",
     };
   }
 
@@ -317,24 +321,9 @@ export function buildOrderRecord(
   paid_at: string | null;
 } {
   const orderNumber = extractOrderId(payload);
-  const displayId = orderNumber.slice(-8).toUpperCase();
+  const displayIdFromPayload = clean(payload.previewId as string);
+  const displayId = displayIdFromPayload || orderNumber.slice(-8).toUpperCase();
   const paymentType = extractPaymentType(payload, forcedPaymentType);
-  const decision = decideFiveColumn(payload, existing?.kanban_status ?? null);
-
-  const lockedDevolvido =
-    existing?.kanban_status === "devolvidos" && decision.column !== "Devolvido";
-  // Uma vez entregue/pago, não regredir — exceto para Devolvido ou Requer Atenção
-  const lockedFinal =
-    (existing?.kanban_status === "pagos" || existing?.kanban_status === "entregue") &&
-    !["Entregue", "Concluido", "Reenviado", "Devolvido", "Requer Atenção"].includes(decision.column);
-
-  const finalInternal: FiveInternalColumn = lockedFinal
-    ? (existing?.kanban_status === "pagos" ? "Concluido" : "Entregue")
-    : lockedDevolvido
-      ? "Devolvido"
-      : decision.column;
-
-  const kanbanStatus = mapFiveColumnToKanban(finalInternal, paymentType);
 
   const email =
     clean(get(payload, "customer.mail")) || clean(existing?.customer_email);
@@ -342,18 +331,35 @@ export function buildOrderRecord(
     clean(get(payload, "customer.phoneNumber")) ||
       clean(existing?.customer_phone ?? "")
   );
-  const paid = isPaid(email);
   const shippingCode = clean(get(payload, "shipping.shippingCode"));
   const address = (payload.customer as Record<string, unknown> | undefined)
     ?.address as Record<string, unknown> | undefined;
 
-  // Priority: shipping.shippingStatus > shippingStatus (root) > eventStatus > event
   const shippingStatus = clean(
     get(payload, "shipping.shippingStatus") ||
       payload.shippingStatus ||
       payload.eventStatus ||
       payload.event
   ).toUpperCase();
+
+  const statusPedido = clean(payload.statusPedido as string);
+  const statusPagamento =
+    clean(payload.statusPagamento as string) ||
+    clean(get(payload, "charge.paymentStatus"));
+
+  const kanbanProposed = mapShippingStatusToKanban(
+    shippingStatus || (clean(payload.event) === "ORDER_CREATE" ? "ORDER_CREATE" : ""),
+    statusPedido,
+    email,
+    paymentType,
+    statusPagamento
+  );
+  const kanbanStatus = applyKanbanLocks(
+    kanbanProposed,
+    existing?.kanban_status ?? null
+  );
+
+  const paid = isFivePaidEmail(email);
 
   let paidAt = existing?.paid_at ?? null;
   if (paid && shippingStatus === "DELIVERED" && !paidAt) {

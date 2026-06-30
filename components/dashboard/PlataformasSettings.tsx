@@ -13,6 +13,7 @@ import {
 import { parseJsonResponse } from "@/lib/parse-json-response";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
+import { FiveCsvImport } from "@/components/dashboard/FiveCsvImport";
 import { cn } from "@/lib/utils";
 
 interface IntegrationInfo {
@@ -292,6 +293,8 @@ export function PlataformasSettings() {
           />
         </div>
       )}
+
+      <FiveCsvImport />
 
       <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Regenerar chave?">
         <p className="mb-6 text-sm text-gray-600">
