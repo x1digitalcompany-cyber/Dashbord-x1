@@ -50,6 +50,7 @@ interface FinanceCardProps {
   iconBg: string;
   iconColor: string;
   value: string;
+  valueAddon?: React.ReactNode;
   subtext?: string;
   highlight?: boolean;
   headerExtra?: React.ReactNode;
@@ -61,6 +62,7 @@ function FinanceCard({
   iconBg,
   iconColor,
   value,
+  valueAddon,
   subtext,
   highlight,
   headerExtra,
@@ -86,14 +88,28 @@ function FinanceCard({
           <Icon size={16} className={iconColor} />
         </div>
       </div>
-      <p
-        className={cn(
-          "text-2xl font-bold tabular-nums tracking-tight",
-          highlight ? "text-emerald-800 dark:text-emerald-200" : "text-gray-900 dark:text-gray-100"
-        )}
-      >
-        {value}
-      </p>
+      {valueAddon ? (
+        <div className="flex items-baseline gap-2">
+          <span
+            className={cn(
+              "text-2xl font-semibold tabular-nums tracking-tight",
+              highlight ? "text-emerald-800 dark:text-emerald-200" : "text-gray-900 dark:text-gray-100"
+            )}
+          >
+            {value}
+          </span>
+          {valueAddon}
+        </div>
+      ) : (
+        <p
+          className={cn(
+            "text-2xl font-bold tabular-nums tracking-tight",
+            highlight ? "text-emerald-800 dark:text-emerald-200" : "text-gray-900 dark:text-gray-100"
+          )}
+        >
+          {value}
+        </p>
+      )}
       {subtext && (
         <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">{subtext}</p>
       )}
@@ -371,6 +387,11 @@ export function DashboardFinanceGrid() {
         iconBg="bg-amber-100"
         iconColor="text-amber-600"
         value={formatNumber(f.totalVendas)}
+        valueAddon={
+          <span className="text-lg tabular-nums text-gray-500 dark:text-gray-400">
+            {formatCurrency(f.faturamentoTotal)}
+          </span>
+        }
       />
       <FinanceCard
         label="Ticket Médio"
