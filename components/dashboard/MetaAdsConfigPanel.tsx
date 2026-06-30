@@ -147,7 +147,8 @@ export function MetaAdsConfigPanel() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const loadAccounts = useCallback(async () => {
-    const res = await fetch("/api/dashboard/meta-ads/accounts");
+    // cache: "no-store" garante dados frescos do servidor após PATCH
+    const res = await fetch("/api/dashboard/meta-ads/accounts", { cache: "no-store" });
     const json = await parseJsonResponse<{
       businessManagers: BusinessManager[];
       error?: string;
@@ -376,7 +377,11 @@ export function MetaAdsConfigPanel() {
       const json = await parseJsonResponse<{ error?: string }>(res);
       if (!res.ok) throw new Error(json.error ?? "Falha ao salvar");
       closeEditBmModal();
-      await load();
+      // Chamar loadAccounts() diretamente em vez de load():
+      // — load() engolia erros internamente sem relançar, fazendo o toast
+      //   aparecer mesmo quando o refetch falhava e a lista ficava desatualizada.
+      // — Aqui qualquer erro de rede/auth vai para o catch abaixo.
+      await loadAccounts();
       showToast("BM atualizada com sucesso");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao salvar BM");
