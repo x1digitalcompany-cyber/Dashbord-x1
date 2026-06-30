@@ -21,7 +21,7 @@ type TableRow = {
 };
 
 function buildRows(data: PagamentosExpanded): TableRow[] {
-  const { pagarme, payt, braip } = data;
+  const { pagarme, payt, braip, x1company } = data;
   const rows: TableRow[] = [
     { label: "Pagar.me — Aprovados", volume: pagarme.aprovados_valor, count: pagarme.aprovados_count, badge: "green" },
     { label: "Pagar.me — Pendentes", volume: pagarme.pendentes_valor, count: pagarme.pendentes_count, badge: "yellow" },
@@ -32,6 +32,9 @@ function buildRows(data: PagamentosExpanded): TableRow[] {
     { label: "Braip — Aprovados", volume: braip.aprovados_valor, count: braip.aprovados_count, badge: "green" },
     { label: "Braip — Pendentes", volume: braip.pendentes_valor, count: braip.pendentes_count, badge: "yellow" },
     { label: "Braip — Reembolsos", volume: braip.reembolsos_valor, count: braip.reembolsos_count, badge: "red" },
+    { label: "X1Company — Aprovados", volume: data.x1company.aprovados_valor, count: data.x1company.aprovados_count, badge: "green" },
+    { label: "X1Company — Pendentes", volume: data.x1company.pendentes_valor, count: data.x1company.pendentes_count, badge: "yellow" },
+    { label: "X1Company — Reembolsos", volume: data.x1company.reembolsos_valor, count: data.x1company.reembolsos_count, badge: "red" },
   ];
   return rows.filter((r) => r.count > 0 || r.volume > 0);
 }

@@ -14,7 +14,7 @@ import { useFetchOnFilters } from "@/contexts/DashboardFiltersContext";
 import { formatCurrency } from "@/lib/utils";
 import type { PagamentosExpanded, PagarmePaymentStats, PaytBraipPaymentStats } from "@/types";
 
-const GATEWAY_COLORS = ["#6366f1", "#f59e0b", "#10b981"];
+const GATEWAY_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#8b5cf6"];
 
 function gatewaySummary(stats: PagarmePaymentStats | PaytBraipPaymentStats, isPagarme: boolean) {
   const estornosValor = isPagarme
@@ -42,7 +42,8 @@ export default function PagamentosPage() {
     return (
       <div className="mx-auto max-w-[1000px] space-y-5">
         <Skeleton className="h-24 rounded-2xl" />
-        <div className="grid grid-cols-3 gap-5">
+        <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
+          <Skeleton className="h-28 rounded-2xl" />
           <Skeleton className="h-28 rounded-2xl" />
           <Skeleton className="h-28 rounded-2xl" />
           <Skeleton className="h-28 rounded-2xl" />
@@ -67,6 +68,7 @@ export default function PagamentosPage() {
     { key: "pagarme", label: "Pagar.me", ...gatewaySummary(d.pagarme, true) },
     { key: "payt", label: "Payt", ...gatewaySummary(d.payt, false) },
     { key: "braip", label: "Braip", ...gatewaySummary(d.braip, false) },
+    { key: "x1company", label: "X1Company", ...gatewaySummary(d.x1company, false) },
   ];
 
   const pieData = gateways
@@ -85,7 +87,7 @@ export default function PagamentosPage() {
         <p className="text-sm text-gray-500">{d.total.transacoes} transações</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {gateways.map((g) => (
           <div
             key={g.key}

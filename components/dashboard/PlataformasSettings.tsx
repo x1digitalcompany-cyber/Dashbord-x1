@@ -34,6 +34,7 @@ interface IntegrationsData {
   fiveAgendado: IntegrationInfo;
   payt: IntegrationInfo;
   braip: IntegrationInfo;
+  x1company: IntegrationInfo;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -271,6 +272,20 @@ export function PlataformasSettings() {
                 <li>Adicione uma nova integração de postback</li>
                 <li>Cole a URL acima no campo de URL de Postback</li>
                 <li>Selecione os eventos: Venda aprovada, Reembolso</li>
+                <li>Salve as configurações</li>
+              </ol>
+            }
+          />
+
+          <IntegrationCard
+            title="Integração X1Company"
+            info={data.x1company}
+            instructions={
+              <ol className="list-decimal space-y-1 pl-4">
+                <li>Acesse o painel da X1Company</li>
+                <li>Vá em Configurações → Webhooks ou Postback</li>
+                <li>Cole a URL acima no campo de URL de Postback</li>
+                <li>Ative notificações para Pagamento aprovado e Reembolso</li>
                 <li>Salve as configurações</li>
               </ol>
             }

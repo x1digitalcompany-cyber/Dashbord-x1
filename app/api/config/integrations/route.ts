@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const base = process.env.NEXTAUTH_URL ?? req.nextUrl.origin;
   const secret = await getWebhookSecret();
 
-  const [antecipadoLog, agendadoLog, paytLast, braipLast] = await Promise.all([
+  const [antecipadoLog, agendadoLog, paytLast, braipLast, x1companyLast] = await Promise.all([
     supabase
       .from("webhook_logs")
       .select("order_number, created_at, error")
@@ -36,6 +36,12 @@ export async function GET(req: NextRequest) {
       .maybeSingle(),
     supabase
       .from("braip_payments")
+      .select("transaction_id, created_at, status")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("x1company_payments")
       .select("transaction_id, created_at, status")
       .order("created_at", { ascending: false })
       .limit(1)
@@ -93,6 +99,18 @@ export async function GET(req: NextRequest) {
             at: braipLast.data.created_at,
             atFormatted: formatDatetime(braipLast.data.created_at),
             status: braipLast.data.status,
+          }
+        : null,
+    },
+    x1company: {
+      url: url("/api/webhooks/x1company"),
+      active: Boolean(x1companyLast.data),
+      lastReceived: x1companyLast.data
+        ? {
+            id: x1companyLast.data.transaction_id,
+            at: x1companyLast.data.created_at,
+            atFormatted: formatDatetime(x1companyLast.data.created_at),
+            status: x1companyLast.data.status,
           }
         : null,
     },

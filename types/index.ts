@@ -64,7 +64,7 @@ export interface SellerAgendamento {
 // ─── Payments ────────────────────────────────────────────────────────────────
 
 export type PaymentStatus = "approved" | "pending" | "refunded" | "chargeback";
-export type PaymentGateway = "pagarme" | "payt" | "five" | "braip";
+export type PaymentGateway = "pagarme" | "payt" | "five" | "braip" | "x1company";
 
 export interface PaymentRow {
   gateway: PaymentGateway;
@@ -225,6 +225,7 @@ export interface PagamentosExpanded {
   pagarme: PagarmePaymentStats;
   payt: PaytBraipPaymentStats;
   braip: PaytBraipPaymentStats;
+  x1company: PaytBraipPaymentStats;
   total: { valor: number; transacoes: number };
 }
 

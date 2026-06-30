@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
           fiveAgendado: `${base}/api/webhooks/five/agendado?secret=${secret}`,
           payt: `${base}/api/webhooks/payt?secret=${secret}`,
           braip: `${base}/api/webhooks/braip?secret=${secret}`,
+          x1company: `${base}/api/webhooks/x1company?secret=${secret}`,
         }
       : null,
   });
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
         fiveAgendado: `${base}/api/webhooks/five/agendado?secret=${newSecret}`,
         payt: `${base}/api/webhooks/payt?secret=${newSecret}`,
         braip: `${base}/api/webhooks/braip?secret=${newSecret}`,
+        x1company: `${base}/api/webhooks/x1company?secret=${newSecret}`,
       },
     });
   } catch (err: unknown) {
