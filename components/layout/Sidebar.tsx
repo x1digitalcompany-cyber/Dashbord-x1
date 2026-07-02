@@ -13,6 +13,7 @@ import {
   Settings,
   Menu,
   LogOut,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +33,7 @@ const NAV_ITEMS: {
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/kanban", label: "Kanban Five", icon: Columns3 },
   { href: "/agendamentos", label: "Agendamentos", icon: CalendarDays },
+  { href: "/vendedores", label: "Vendedores", icon: Users },
   { href: "/anuncios", label: "Anúncios", icon: Megaphone },
   { href: "/pagamentos", label: "Pagamentos", icon: CreditCard },
   { href: "/configuracoes", label: "Configurações", icon: Settings },

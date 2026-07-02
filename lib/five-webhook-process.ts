@@ -135,6 +135,17 @@ async function logWebhook(
   }
 }
 
+async function upsertSeller(name: string | null | undefined) {
+  if (!name?.trim()) return;
+  try {
+    await supabase
+      .from("sellers")
+      .upsert({ name: name.trim() }, { onConflict: "name", ignoreDuplicates: true });
+  } catch {
+    /* non-blocking — sellers table pode não existir ainda */
+  }
+}
+
 async function syncAppointment(
   saved: {
     id: string;
@@ -277,6 +288,7 @@ export async function processFiveWebhookPost(
     if (upsertError) throw upsertError;
 
     await syncAppointment(saved);
+    await upsertSeller(record.seller_name);
     await logWebhook(source, orderNumber, data, record.kanban_status, null);
 
     return json(200, {

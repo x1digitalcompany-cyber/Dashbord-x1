@@ -295,6 +295,8 @@ export async function processFiveCsvRows(
     total: rows.length,
   };
 
+  const sellerNames = new Set<string>();
+
   for (let i = 0; i < rows.length; i += FIVE_CSV_BATCH_SIZE) {
     const batch = rows.slice(i, i + FIVE_CSV_BATCH_SIZE);
 
@@ -343,6 +345,9 @@ export async function processFiveCsvRows(
           if (error) throw error;
           summary.criados += 1;
         }
+
+        const sellerName = payload.seller_name?.trim();
+        if (sellerName) sellerNames.add(sellerName);
       } catch (err) {
         summary.erros.push({
           linha: lineNumber,
@@ -356,6 +361,20 @@ export async function processFiveCsvRows(
 
     if (rows.length > 1000) {
       await new Promise((resolve) => setImmediate(resolve));
+    }
+  }
+
+  // Upsert vendedores coletados durante o processamento
+  if (sellerNames.size > 0) {
+    try {
+      await supabase
+        .from("sellers")
+        .upsert(
+          [...sellerNames].map((name) => ({ name })),
+          { onConflict: "name", ignoreDuplicates: true }
+        );
+    } catch {
+      /* non-blocking */
     }
   }
 
