@@ -6,6 +6,7 @@ import { parseFromToParams } from "@/lib/period";
 interface OrderRow {
   seller_name: string | null;
   kanban_status: string;
+  payment_type: string | null;
   value: number | string | null;
 }
 
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
         .order("name"),
       supabase
         .from("orders")
-        .select("seller_name, kanban_status, value")
+        .select("seller_name, kanban_status, payment_type, value")
         .not("seller_name", "is", null)
         .neq("seller_name", "")
         .neq("customer_email", "cliente@example.com")
@@ -71,9 +72,16 @@ export async function GET(req: NextRequest) {
     const s = statsMap.get(name)!;
     s.pedidos += 1;
     if (o.kanban_status === "entregue") s.entregues += 1;
-    if (o.kanban_status === "pagos") { s.pagos += 1; s.faturamento += toNum(o.value); }
+    if (o.kanban_status === "pagos") s.pagos += 1;
     if (o.kanban_status === "inadimplentes") s.inadimplentes += 1;
     if (o.kanban_status === "devolvidos") s.devolvidos += 1;
+    // antecipado: "entregue" is the final paid state; agendado: "pagos"
+    if (
+      o.kanban_status === "pagos" ||
+      (o.kanban_status === "entregue" && o.payment_type === "antecipado")
+    ) {
+      s.faturamento += toNum(o.value);
+    }
   }
 
   // Merge sellers table with stats — sellers table is the source of truth for metadata

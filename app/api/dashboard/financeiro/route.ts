@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { fetchMetaAdsInsights } from "@/lib/api/meta-ads";
-import { pctChange, prevPeriod, round2, safeDivide, REVENUE_STATUSES, SALE_STATUS } from "@/lib/finance";
+import { pctChange, prevPeriod, round2, safeDivide, isRevenue, isSale } from "@/lib/finance";
 import { parseFromToParams } from "@/lib/period";
 import { parseSellerParam } from "@/lib/seller-filter";
 import type { FinanceiroData } from "@/types";
@@ -31,7 +31,7 @@ function groupByDay(orders: OrderRow[], filter: (o: OrderRow) => boolean) {
     const day = o.created_at.slice(0, 10);
     const cur = map.get(day) ?? { revenue: 0, sales: 0 };
     cur.revenue += Number(o.value);
-    if (o.kanban_status === SALE_STATUS) cur.sales += 1;
+    if (isSale(o)) cur.sales += 1;
     map.set(day, cur);
   }
   return Array.from(map.entries())
@@ -63,33 +63,22 @@ function buildMetrics(
   adSpend: number,
   leadsAtendidos: number
 ) {
-  const faturamento = sumOrders(orders, (o) =>
-    REVENUE_STATUSES.includes(o.kanban_status as typeof REVENUE_STATUSES[number])
-  );
-  const totalVendas = countOrders(orders, (o) => o.kanban_status === SALE_STATUS);
+  const faturamento = sumOrders(orders, isRevenue);
+  const totalVendas = countOrders(orders, isSale);
   const inadimplencia = sumOrders(orders, (o) => o.kanban_status === "inadimplentes");
   const lucro = faturamento - adSpend;
 
   const antecipado = {
-    faturamento: sumOrders(orders, (o) =>
-      REVENUE_STATUSES.includes(o.kanban_status as typeof REVENUE_STATUSES[number]) &&
-      o.payment_type === "antecipado"
-    ),
-    vendas: countOrders(
-      orders,
-      (o) => o.kanban_status === SALE_STATUS && o.payment_type === "antecipado"
-    ),
+    faturamento: sumOrders(orders, (o) => isRevenue(o) && o.payment_type === "antecipado"),
+    vendas: countOrders(orders, (o) => isSale(o) && o.payment_type === "antecipado"),
   };
   const payafter = {
     faturamento: sumOrders(orders, (o) =>
-      REVENUE_STATUSES.includes(o.kanban_status as typeof REVENUE_STATUSES[number]) &&
-      (o.payment_type === "payafter" || o.payment_type === "agendado")
+      isRevenue(o) && (o.payment_type === "payafter" || o.payment_type === "agendado")
     ),
     vendas: countOrders(
       orders,
-      (o) =>
-        o.kanban_status === SALE_STATUS &&
-        (o.payment_type === "payafter" || o.payment_type === "agendado")
+      (o) => isSale(o) && (o.payment_type === "payafter" || o.payment_type === "agendado")
     ),
   };
 
@@ -194,10 +183,8 @@ export async function GET(req: NextRequest) {
       metaPrev.leads > 0 ? metaPrev.leads : leadsPrev
     );
 
-    const revenueByDay = groupByDay(orders, (o) =>
-      REVENUE_STATUSES.includes(o.kanban_status as typeof REVENUE_STATUSES[number])
-    );
-    const salesByDay = groupByDay(orders, (o) => o.kanban_status === SALE_STATUS);
+    const revenueByDay = groupByDay(orders, isRevenue);
+    const salesByDay = groupByDay(orders, isSale);
 
     const adSpendByDay = metaCurr.daily.map((d) => ({
       date: d.date,

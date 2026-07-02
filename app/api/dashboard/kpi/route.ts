@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { parseFromToParams } from "@/lib/period";
 import { parseSellerParam } from "@/lib/seller-filter";
 import { fetchMetaAdsInsights } from "@/lib/api/meta-ads";
-import { REVENUE_STATUSES, SALE_STATUS, round2 } from "@/lib/finance";
+import { isRevenue, isSale, round2 } from "@/lib/finance";
 import type { KpiData } from "@/types";
 
 function prevPeriod(from: Date, to: Date) {
@@ -23,20 +23,15 @@ function metaDate(d: Date) {
 interface OrderRow {
   value: number;
   kanban_status: string;
+  payment_type: string | null;
 }
 
 function sumRevenue(orders: OrderRow[]): number {
-  return round2(
-    orders
-      .filter((o) =>
-        REVENUE_STATUSES.includes(o.kanban_status as (typeof REVENUE_STATUSES)[number])
-      )
-      .reduce((s, o) => s + Number(o.value), 0)
-  );
+  return round2(orders.filter(isRevenue).reduce((s, o) => s + Number(o.value), 0));
 }
 
 function countSales(orders: OrderRow[]): number {
-  return orders.filter((o) => o.kanban_status === SALE_STATUS).length;
+  return orders.filter(isSale).length;
 }
 
 export async function GET(req: NextRequest) {
@@ -53,7 +48,7 @@ export async function GET(req: NextRequest) {
 
     let ordersQ = supabase
       .from("orders")
-      .select("value, kanban_status")
+      .select("value, kanban_status, payment_type")
       .neq("customer_email", "cliente@example.com")
       .not("customer_name", "ilike", "%cliente fict%")
       .gte("created_at", fromISO)

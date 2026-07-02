@@ -4,6 +4,18 @@ export const REVENUE_STATUSES: KanbanColumn[] = ["pagos", "inadimplentes"];
 export const SALE_STATUS: KanbanColumn = "pagos";
 export const DEFAULT_STATUS: KanbanColumn = "inadimplentes";
 
+// Antecipado orders reach "entregue" as their final paid state (migration 006).
+// Agendado/payafter orders reach "pagos"/"inadimplentes".
+export function isRevenue(o: { kanban_status: string; payment_type?: string | null }): boolean {
+  if (o.payment_type === "antecipado") return o.kanban_status === "entregue";
+  return REVENUE_STATUSES.includes(o.kanban_status as KanbanColumn);
+}
+
+export function isSale(o: { kanban_status: string; payment_type?: string | null }): boolean {
+  if (o.payment_type === "antecipado") return o.kanban_status === "entregue";
+  return o.kanban_status === SALE_STATUS;
+}
+
 export function pctChange(current: number, previous: number): number {
   if (previous === 0) return current > 0 ? 100 : 0;
   return Math.round(((current - previous) / previous) * 1000) / 10;
