@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/require-session";
-import { getWebhookSecret } from "@/lib/webhook-config";
+import {
+  buildWebhookUrl,
+  getWebhookId,
+  getWebhookSecret,
+  maskSecretKey,
+} from "@/lib/webhook-config";
 import { supabase } from "@/lib/supabase";
 import { formatDatetime } from "@/lib/utils";
 
@@ -12,6 +17,7 @@ export async function GET(req: NextRequest) {
 
   const base = process.env.NEXTAUTH_URL ?? req.nextUrl.origin;
   const secret = await getWebhookSecret();
+  const webhookId = await getWebhookId();
 
   const [antecipadoLog, agendadoLog, paytLast, braipLast, x1companyLast] = await Promise.all([
     supabase
@@ -49,14 +55,15 @@ export async function GET(req: NextRequest) {
   ]);
 
   const url = (path: string) =>
-    secret ? `${base}${path}?secret=${secret}` : `${base}${path}`;
+    webhookId ? buildWebhookUrl(base, path, webhookId) : `${base}${path}`;
 
   return NextResponse.json({
     secretConfigured: Boolean(secret),
-    secretMasked: secret ? `${secret.slice(0, 8)}***` : null,
+    secretMasked: secret ? maskSecretKey(secret) : null,
+    webhookId,
     fiveAntecipado: {
       url: url("/api/webhooks/five/antecipado"),
-      active: Boolean(secret),
+      active: Boolean(webhookId),
       lastReceived: antecipadoLog.data
         ? {
             id: antecipadoLog.data.order_number,
@@ -68,7 +75,7 @@ export async function GET(req: NextRequest) {
     },
     fiveAgendado: {
       url: url("/api/webhooks/five/agendado"),
-      active: Boolean(secret),
+      active: Boolean(webhookId),
       lastReceived: agendadoLog.data
         ? {
             id: agendadoLog.data.order_number,
@@ -80,7 +87,7 @@ export async function GET(req: NextRequest) {
     },
     payt: {
       url: url("/api/webhooks/payt"),
-      active: Boolean(paytLast.data),
+      active: Boolean(webhookId),
       lastReceived: paytLast.data
         ? {
             id: paytLast.data.transaction_id,
@@ -92,7 +99,7 @@ export async function GET(req: NextRequest) {
     },
     braip: {
       url: url("/api/webhooks/braip"),
-      active: Boolean(braipLast.data),
+      active: Boolean(webhookId),
       lastReceived: braipLast.data
         ? {
             id: braipLast.data.transaction_id,
@@ -104,7 +111,7 @@ export async function GET(req: NextRequest) {
     },
     x1company: {
       url: url("/api/webhooks/x1company"),
-      active: Boolean(x1companyLast.data),
+      active: Boolean(webhookId),
       lastReceived: x1companyLast.data
         ? {
             id: x1companyLast.data.transaction_id,

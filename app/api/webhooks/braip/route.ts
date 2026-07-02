@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { validateWebhookSecret } from "@/lib/webhook-config";
+import { validateWebhookRequest } from "@/lib/webhook-config";
 import { parseBraipPayment } from "@/lib/payment-parsers";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, X-Webhook-Secret",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
@@ -23,9 +23,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const incoming = (req.nextUrl.searchParams.get("secret") ?? "").trim();
-    if (!incoming || !(await validateWebhookSecret(incoming))) {
-      return json(401, { error: "Secret inválido" });
+    const auth = await validateWebhookRequest(req);
+    if (!auth.ok) {
+      return json(401, { error: auth.error });
     }
 
     const rawBody = (await req.json()) as Record<string, unknown>;

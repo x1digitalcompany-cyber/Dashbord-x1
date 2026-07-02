@@ -4,8 +4,8 @@
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * A Five envia POST com JSON puro. SEM header de autenticação.
- * Autenticação: secret como query param na URL cadastrada na Five.
- *   Ex: /api/webhooks/five/antecipado?secret=<FIVE_WEBHOOK_SECRET_ANTECIPADO>
+ * Autenticação: ?id=[webhook_id] na URL (permanente) ou ?secret= (legado).
+ *   Ex: /api/webhooks/five/antecipado?id=<WEBHOOK_ID_FIXO>
  *
  * CAMPOS DO PAYLOAD:
  *   orderId                        string  — ID único do pedido (chave upsert)
@@ -61,7 +61,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { getWebhookSecret } from "@/lib/webhook-config";
+import { validateWebhookRequest, hasWebhookAuthConfigured } from "@/lib/webhook-config";
 import {
   buildOrderRecord,
   validateFivePayload,
@@ -75,7 +75,7 @@ export type FiveWebhookSource = "antecipado" | "agendado";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, X-Webhook-Secret",
   "Access-Control-Allow-Methods": "GET, POST, HEAD, OPTIONS",
 };
 
@@ -99,20 +99,6 @@ export function fiveWebhookGet(source: FiveWebhookSource, path: string) {
 
 export function fiveWebhookHead() {
   return new NextResponse(null, { status: 200, headers: corsHeaders });
-}
-
-function getSecretFromRequest(req: NextRequest): string {
-  return (req.nextUrl.searchParams.get("secret") ?? "").trim();
-}
-
-async function expectedSecret(source: FiveWebhookSource): Promise<string | undefined> {
-  const globalSecret = await getWebhookSecret();
-  if (globalSecret) return globalSecret;
-
-  if (source === "antecipado") {
-    return process.env.FIVE_WEBHOOK_SECRET_ANTECIPADO?.trim();
-  }
-  return process.env.FIVE_WEBHOOK_SECRET_AGENDADO?.trim();
 }
 
 async function logWebhook(
@@ -196,26 +182,18 @@ export async function processFiveWebhookPost(
   source: FiveWebhookSource,
   options?: { skipSecret?: boolean }
 ): Promise<NextResponse> {
-  const secret = await expectedSecret(source);
-  const envKey = `FIVE_WEBHOOK_SECRET_${source === "antecipado" ? "ANTECIPADO" : "AGENDADO"}`;
   const isProd = process.env.NODE_ENV === "production";
 
   if (!options?.skipSecret) {
-    if (!secret) {
-      if (isProd) {
-        return json(401, {
-          ok: false,
-          error: `Configure ${envKey} nas variáveis de ambiente (Vercel → Settings → Environment Variables).`,
-        });
-      }
-      // Dev: aceita sem secret mas avisa no console
-      console.warn(
-        `[webhook/five/${source}] AVISO: ${envKey} não configurada — aceitando em modo dev. Em produção a Five deve enviar a URL com ?secret=VALOR.`
-      );
-    } else {
-      const incoming = getSecretFromRequest(req);
-      if (incoming !== secret) {
-        return json(401, { ok: false, error: "Secret inválido (query param ?secret=)." });
+    const auth = await validateWebhookRequest(req);
+    if (!auth.ok) {
+      const configured = await hasWebhookAuthConfigured();
+      if (!configured && !isProd) {
+        console.warn(
+          `[webhook/five/${source}] AVISO: autenticação não configurada — aceitando em modo dev.`
+        );
+      } else {
+        return json(401, { ok: false, error: auth.error });
       }
     }
   }

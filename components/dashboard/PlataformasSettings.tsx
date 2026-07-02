@@ -82,10 +82,13 @@ function IntegrationCard({
         </Badge>
       </div>
 
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <code className="min-w-0 flex-1 truncate rounded-lg bg-gray-50 px-2 py-1.5 text-xs dark:bg-gray-900">
           {info.url}
         </code>
+        <Badge className="shrink-0 bg-blue-50 text-xs text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+          URL permanente — nunca muda
+        </Badge>
         <CopyButton text={info.url} />
       </div>
 
@@ -114,6 +117,7 @@ export function PlataformasSettings() {
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [regenerateMessage, setRegenerateMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,9 +141,12 @@ export function PlataformasSettings() {
     setRegenerating(true);
     try {
       const res = await fetch("/api/config/webhook-secret", { method: "POST" });
-      const json = await parseJsonResponse<{ error?: string }>(res);
+      const json = await parseJsonResponse<{ error?: string; message?: string }>(res);
       if (!res.ok) throw new Error(json.error ?? "Falha ao regenerar");
       setConfirmOpen(false);
+      setRegenerateMessage(
+        json.message ?? "A chave interna foi renovada. As URLs dos webhooks não mudaram."
+      );
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao regenerar");
@@ -161,7 +168,7 @@ export function PlataformasSettings() {
               Chave de Segurança
             </h2>
             <p className="text-sm text-gray-400">
-              Sua chave única é usada para autenticar os webhooks de todas as plataformas
+              Chave interna de segurança — pode ser regenerada sem alterar as URLs dos webhooks
             </p>
           </div>
         </div>
@@ -180,9 +187,15 @@ export function PlataformasSettings() {
               </code>
             </p>
             <p className="mb-4 text-xs text-gray-500">
-              Se você suspeitar que sua chave foi comprometida, regenere-a. Lembre-se de atualizar
-              as URLs em todas as plataformas.
+              Se você suspeitar que a chave foi comprometida, regenere-a. As URLs com{" "}
+              <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">?id=</code> permanecem
+              as mesmas — não é necessário atualizar as plataformas.
             </p>
+            {regenerateMessage && (
+              <p className="mb-4 text-xs text-emerald-600 dark:text-emerald-400">
+                {regenerateMessage}
+              </p>
+            )}
             <button
               type="button"
               onClick={() => setConfirmOpen(true)}
@@ -207,8 +220,8 @@ export function PlataformasSettings() {
                 <li>Cole a URL completa do webhook na plataforma Five (antecipada)</li>
                 <li>Método POST, formato JSON</li>
                 <li>
-                  O <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">?secret=</code> já
-                  está incluso na URL
+                  O <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">?id=</code> na URL
+                  é permanente — cole a URL completa na Five
                 </li>
               </ol>
             }
@@ -222,8 +235,8 @@ export function PlataformasSettings() {
                 <li>Cole a URL completa do webhook na plataforma Five (agendada / PayAfter)</li>
                 <li>Método POST, formato JSON</li>
                 <li>
-                  O <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">?secret=</code> já
-                  está incluso na URL
+                  O <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">?id=</code> na URL
+                  é permanente — cole a URL completa na Five
                 </li>
               </ol>
             }
@@ -298,8 +311,9 @@ export function PlataformasSettings() {
 
       <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Regenerar chave?">
         <p className="mb-6 text-sm text-gray-600">
-          Isso vai invalidar todos os webhooks ativos. Você precisará atualizar as URLs na Five,
-          Payt e Braip. Continuar?
+          Isso renova apenas a chave interna de segurança. As URLs dos webhooks com{" "}
+          <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">?id=</code> não vão mudar.
+          Continuar?
         </p>
         <div className="flex justify-end gap-2">
           <button

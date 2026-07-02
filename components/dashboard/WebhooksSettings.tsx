@@ -60,7 +60,7 @@ function WebhookCard({
         <span
           className={`text-xs ${info.secretConfigured ? "text-emerald-600" : "text-amber-600"}`}
         >
-          {info.secretConfigured ? "Secret configurado" : "Secret ausente no .env.local"}
+          {info.secretConfigured ? "Webhook configurado" : "Webhook não configurado"}
         </span>
       </div>
 
@@ -72,7 +72,7 @@ function WebhookCard({
       </div>
 
       <p className="mb-3 text-xs text-gray-500">
-        O <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">?secret=</code> já está incluído na URL acima — cole a URL completa na Five.
+        O <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">?id=</code> na URL é permanente — cole a URL completa na Five.
       </p>
 
       {info.lastReceived ? (
@@ -198,9 +198,9 @@ export function WebhooksSettings() {
           <div className="rounded-lg border border-dashed border-gray-200 p-3 text-xs text-gray-500 dark:border-gray-700">
             <p className="mb-1 font-medium text-gray-700 dark:text-gray-300">Na plataforma Five:</p>
             <ol className="list-decimal space-y-1 pl-4">
-              <li>Cole a URL completa do webhook (o <code>?secret=…</code> já está incluso)</li>
+              <li>Cole a URL completa do webhook (o <code>?id=…</code> é permanente)</li>
               <li>Método POST, formato JSON</li>
-              <li>Nenhum header extra — a autenticação é via query param na URL</li>
+              <li>Nenhum header extra necessário — a autenticação é via <code>?id=</code> na URL</li>
             </ol>
           </div>
         </div>
